@@ -4,3 +4,9 @@ xlrd
 openpyxl
 matplotlib
 geopy
+fiona
+six
+cython
+pyproj
+shapely
+geopandas

@@ -7,7 +7,9 @@ from shapely.affinity import translate
 from collections import Counter
 from os.path import exists
 from os import remove
+import numpy as np
 from numpy import mean, std, sqrt, nan
+from scipy.stats import shapiro
 
 from matplotlib import rc
 rc('font', **{'family': 'serif', 'serif': ['Computer Modern Roman']})
@@ -40,6 +42,7 @@ class Processor:
         # preprocessing
         #
         df = self.__preprocess_cities(df_initial)
+        df = self.__preprocess_answers(df)
 
         #
         # processing
@@ -91,6 +94,24 @@ class Processor:
         self.__calculate_core(df_x_statements2, label='Критерии', path_to_result=self.__path_to_x, positive_coeff=True)
         self.__calculate_core(df_x_statements2, label='Критерии', path_to_result=self.__path_to_x, positive_coeff=False)
 
+        # belief
+        df_belief_mean = self.__process_belief(df_belief, self.__path_to_all, 'all_belief', plot=True)
+        df_z_belief_mean = self.__process_belief(df_z_belief, self.__path_to_z, 'z_belief', plot=True)
+        df_y_belief_mean = self.__process_belief(df_y_belief, self.__path_to_y, 'y_belief', plot=True)
+        df_x_belief_mean = self.__process_belief(df_x_belief, self.__path_to_x, 'x_belief', plot=True)
+
+        # social
+        df_social_mean, df_inst_mean = self.__process_social(df_social, self.__path_to_all, 'all_social', plot=True)
+        df_z_social_mean, df_z_inst_mean = self.__process_social(df_z_social, self.__path_to_z, 'z_social', plot=True)
+        df_y_social_mean, df_y_inst_mean = self.__process_social(df_y_social, self.__path_to_y, 'y_social', plot=True)
+        df_x_social_mean, df_x_inst_mean = self.__process_social(df_x_social, self.__path_to_x, 'x_social', plot=True)
+
+        # save excel for all
+        df['belief_mean'] = df_belief_mean
+        df['social_mean'] = df_social_mean
+        df['inst_mean'] = df_inst_mean
+        df.to_excel('all.xlsx')
+
     def __clear_previous(self):
         if exists(self.__path_to_all):
             remove(self.__path_to_all)
@@ -105,9 +126,7 @@ class Processor:
     def __check(df):
         # to_drop = []
         for feature in df.columns:
-            # print(feature)
             col = df[feature]
-            # print(col.head(25))
             for i in range(len(col)):
                 if col[i] is nan or col[i] is None or col[i] == '':
                     # to_drop.append((i, feature))
@@ -422,9 +441,9 @@ class Processor:
     @staticmethod
     def __calculate_core(df, label, path_to_result, positive_coeff=True):
         if positive_coeff:
-            target_answers = ('Скорее согласен', 'Полностью согласен')
+            target_answers = (1, 2)
         else:
-            target_answers = ('Скорее не согласен', 'Полностью не согласен')
+            target_answers = (4, 5)
 
         features = list(df.columns)
         n_features = len(features)
@@ -475,6 +494,175 @@ class Processor:
             f.write('Число утверждений: {:03d} ({:04.1f}%)\n'.format(len(periphery), len(periphery) / n_features * 100))
             for i in range(len(periphery)):
                 f.write('{}: {:04.1f}\n'.format(periphery[i][0], periphery[i][1]))
+
+    @staticmethod
+    def __calculate_levels(df, min_val, max_val):
+        mean_val = 0.5 * (min_val + max_val)
+        delta = max_val - min_val
+        val_15, val_25, val_75, val_85 = 0.15 * delta + min_val, 0.25 * delta + min_val, 0.75 * delta + min_val, 0.85 * delta + min_val
+        n_0_15 = len(df[df < val_15])
+        n_15_25 = len(df[(df > val_15) & (df < val_25)])
+        n_25_50 = len(df[(df > val_25) & (df < mean_val)])
+        n_50_75 = len(df[(df > mean_val) & (df < val_75)])
+        n_75_85 = len(df[(df > val_75) & (df < val_85)])
+        n_85_100 = len(df[df > val_85])
+
+        return n_0_15, n_15_25, n_25_50, n_50_75, n_75_85, n_85_100
+
+    @staticmethod
+    def __preprocess_answers(df):
+        df = df.replace('Абсолютно согласен', 5)
+        df = df.replace('Согласен', 4)
+        df = df.replace('Затрудняюсь ответить', 3)
+        df = df.replace('Не согласен', 2)
+        df = df.replace('Абсолютно не согласен', 1)
+
+        df = df.replace('Полностью согласен', 5)
+        df = df.replace('Скорее согласен', 4)
+        df = df.replace('Затрудняюсь ответить', 3)
+        df = df.replace('Скорее не согласен', 2)
+        df = df.replace('Полностью не согласен', 1)
+
+        return df
+
+    def __process_belief(self, df, path_to_result, label, plot=False):
+        inversed = [86, 87, 90]
+        for i in inversed:
+            name = '{:03d}'.format(i)
+            df.loc[:][name].replace([1, 2, 4, 5], [5, 4, 2, 1], inplace=True)
+        # df.to_excel('belief.xlsx')
+        df_mean = df.mean(numeric_only=True, axis=1)
+        # df_mean.to_excel('belief_mean.xlsx')
+
+        n = len(df_mean)
+
+        m_0_15, m_15_25, m_25_50, m_50_75, m_75_85, m_85_100 = self.__calculate_levels(df_mean, 1, 5)
+        m_0_15_rel, m_15_25_rel, m_25_50_rel, m_50_75_rel, m_75_85_rel, m_85_100_rel \
+            = m_0_15 / n * 100, m_15_25 / n * 100, m_25_50 / n * 100, m_50_75 / n * 100, m_75_85 / n * 100, m_85_100 / n * 100
+
+        n_0_15, n_15_25, n_25_50, n_50_75, n_75_85, n_85_100 = self.__calculate_levels(df_mean, np.min(df_mean), np.max(df_mean))
+        n_0_15_rel, n_15_25_rel, n_25_50_rel, n_50_75_rel, n_75_85_rel, n_85_100_rel \
+            = n_0_15 / n * 100, n_15_25 / n * 100, n_25_50 / n * 100, n_50_75 / n * 100, n_75_85 / n * 100, n_85_100 / n * 100
+
+        stat, p = shapiro(df_mean)
+        with open(path_to_result, 'a') as f:
+            f.write('\n######### ВЕРА В ЛЮДЕЙ #########\n')
+            f.write('Критерий Шапиро-Уилка: {:04.3f}, p={:04.3f}\n'.format(stat, p))
+            f.write('Уровни (по методике)\n')
+            f.write('000-015%: {:03d} ({:05.1f}%)\n'.format(m_0_15, m_0_15_rel))
+            f.write('015-025%: {:03d} ({:05.1f}%)\n'.format(m_15_25, m_15_25_rel))
+            f.write('025-050%: {:03d} ({:05.1f}%)\n'.format(m_25_50, m_25_50_rel))
+            f.write('050-075%: {:03d} ({:05.1f}%)\n'.format(m_50_75, m_50_75_rel))
+            f.write('075-085%: {:03d} ({:05.1f}%)\n'.format(m_75_85, m_75_85_rel))
+            f.write('085-100%: {:03d} ({:05.1f}%)\n'.format(m_85_100, m_85_100_rel))
+            f.write('Уровни (по выборке)\n')
+            f.write('000-015%: {:03d} ({:05.1f}%)\n'.format(n_0_15, n_0_15_rel))
+            f.write('015-025%: {:03d} ({:05.1f}%)\n'.format(n_15_25, n_15_25_rel))
+            f.write('025-050%: {:03d} ({:05.1f}%)\n'.format(n_25_50, n_25_50_rel))
+            f.write('050-075%: {:03d} ({:05.1f}%)\n'.format(n_50_75, n_50_75_rel))
+            f.write('075-085%: {:03d} ({:05.1f}%)\n'.format(n_75_85, n_75_85_rel))
+            f.write('085-100%: {:03d} ({:05.1f}%)\n'.format(n_85_100, n_85_100_rel))
+
+        if plot:
+            fig = plt.figure(figsize=(10, 10))
+            df_mean.plot.hist(bins=10, color='black', legend=False)
+            plt.xlim([1, 5])
+            plt.savefig('{}_mean.png'.format(label), bbox_inches='tight', dpi=200)
+            plt.close()
+
+        return df_mean
+
+    def __process_social(self, df, path_to_result, label='', plot=False):
+        direct = [118, 121, 122, 123, 125, 127, 129, 133]
+        for i in direct:
+            name = '{:03d}'.format(i)
+            df.loc[:][name].replace([1, 2, 4, 5], [5, 4, 2, 1], inplace=True)
+
+        # social
+
+        social = ['{:03d}'.format(i + 118) for i in range(17)]
+        df_social = df[social]
+        df_social_mean = df_social.mean(numeric_only=True, axis=1)
+
+        if plot:
+            fig = plt.figure(figsize=(10, 10))
+            df_social_mean.plot.hist(bins=10, color='black', legend=False)
+            plt.xlim([1, 5])
+            plt.savefig('{}_social_mean.png'.format(label), bbox_inches='tight', dpi=200)
+            plt.close()
+
+        # inst
+        inst = ['118', '121', '123', '125', '126', '128', '129', '131', '132']
+        df_inst = df[inst]
+        df_inst_mean = df_inst.mean(numeric_only=True, axis=1)
+
+        if plot:
+            fig = plt.figure(figsize=(10, 10))
+            df_inst_mean.plot.hist(bins=10, color='black', legend=False)
+            plt.xlim([1, 5])
+            plt.savefig('{}_inst_mean.png'.format(label), bbox_inches='tight', dpi=200)
+            plt.close()
+
+        n1 = len(df_social_mean)
+
+        m1_0_15, m1_15_25, m1_25_50, m1_50_75, m1_75_85, m1_85_100 = self.__calculate_levels(df_social_mean, 1, 5)
+        m1_0_15_rel, m1_15_25_rel, m1_25_50_rel, m1_50_75_rel, m1_75_85_rel, m1_85_100_rel \
+            = m1_0_15 / n1 * 100, m1_15_25 / n1 * 100, m1_25_50 / n1 * 100, m1_50_75 / n1 * 100, m1_75_85 / n1 * 100, m1_85_100 / n1 * 100
+
+        n1_0_15, n1_15_25, n1_25_50, n1_50_75, n1_75_85, n1_85_100 = self.__calculate_levels(df_social_mean, np.min(df_social_mean),
+                                                                                       np.max(df_social_mean))
+        n1_0_15_rel, n1_15_25_rel, n1_25_50_rel, n1_50_75_rel, n1_75_85_rel, n1_85_100_rel \
+            = n1_0_15 / n1 * 100, n1_15_25 / n1 * 100, n1_25_50 / n1 * 100, n1_50_75 / n1 * 100, n1_75_85 / n1 * 100, n1_85_100 / n1 * 100
+
+        n2 = len(df_inst_mean)
+
+        m2_0_15, m2_15_25, m2_25_50, m2_50_75, m2_75_85, m2_85_100 = self.__calculate_levels(df_inst_mean, 1, 5)
+        m2_0_15_rel, m2_15_25_rel, m2_25_50_rel, m2_50_75_rel, m2_75_85_rel, m2_85_100_rel \
+            = m2_0_15 / n2 * 100, m2_15_25 / n2 * 100, m2_25_50 / n2 * 100, m2_50_75 / n2 * 100, m2_75_85 / n2 * 100, m2_85_100 / n2 * 100
+
+        n2_0_15, n2_15_25, n2_25_50, n2_50_75, n2_75_85, n2_85_100 = self.__calculate_levels(df_inst_mean,
+                                                                                       np.min(df_inst_mean),
+                                                                                       np.max(df_inst_mean))
+        n2_0_15_rel, n2_15_25_rel, n2_25_50_rel, n2_50_75_rel, n2_75_85_rel, n2_85_100_rel \
+            = n2_0_15 / n2 * 100, n2_15_25 / n2 * 100, n2_25_50 / n2 * 100, n2_50_75 / n2 * 100, n2_75_85 / n2 * 100, n2_85_100 / n2 * 100
+
+        stat1, p1 = shapiro(df_social_mean)
+        stat2, p2 = shapiro(df_inst_mean)
+        with open(path_to_result, 'a') as f:
+            f.write('\n######### СОЦИАЛЬНОЕ ДОВЕРИЕ #########\n')
+            f.write('Критерий Шапиро-Уилка: {:04.3f}, p={:04.3f}\n'.format(stat1, p1))
+            f.write('Уровни (по методике)\n')
+            f.write('000-015%: {:03d} ({:05.1f}%)\n'.format(m1_0_15, m1_0_15_rel))
+            f.write('015-025%: {:03d} ({:05.1f}%)\n'.format(m1_15_25, m1_15_25_rel))
+            f.write('025-050%: {:03d} ({:05.1f}%)\n'.format(m1_25_50, m1_25_50_rel))
+            f.write('050-075%: {:03d} ({:05.1f}%)\n'.format(m1_50_75, m1_50_75_rel))
+            f.write('075-085%: {:03d} ({:05.1f}%)\n'.format(m1_75_85, m1_75_85_rel))
+            f.write('085-100%: {:03d} ({:05.1f}%)\n'.format(m1_85_100, m1_85_100_rel))
+            f.write('Уровни (по выборке)\n')
+            f.write('000-015%: {:03d} ({:05.1f}%)\n'.format(n1_0_15, n1_0_15_rel))
+            f.write('015-025%: {:03d} ({:05.1f}%)\n'.format(n1_15_25, n1_15_25_rel))
+            f.write('025-050%: {:03d} ({:05.1f}%)\n'.format(n1_25_50, n1_25_50_rel))
+            f.write('050-075%: {:03d} ({:05.1f}%)\n'.format(n1_50_75, n1_50_75_rel))
+            f.write('075-085%: {:03d} ({:05.1f}%)\n'.format(n1_75_85, n1_75_85_rel))
+            f.write('085-100%: {:03d} ({:05.1f}%)\n'.format(n1_85_100, n1_85_100_rel))
+            f.write('\n##### ИНСТИТУЦИОНАЛЬНОЕ ДОВЕРИЕ #####\n')
+            f.write('Критерий Шапиро-Уилка: {:04.3f}, p={:04.3f}\n'.format(stat2, p2))
+            f.write('Уровни (по методике)\n')
+            f.write('000-015%: {:03d} ({:05.1f}%)\n'.format(m2_0_15, m2_0_15_rel))
+            f.write('015-025%: {:03d} ({:05.1f}%)\n'.format(m2_15_25, m2_15_25_rel))
+            f.write('025-050%: {:03d} ({:05.1f}%)\n'.format(m2_25_50, m2_25_50_rel))
+            f.write('050-075%: {:03d} ({:05.1f}%)\n'.format(m2_50_75, m2_50_75_rel))
+            f.write('075-085%: {:03d} ({:05.1f}%)\n'.format(m2_75_85, m2_75_85_rel))
+            f.write('085-100%: {:03d} ({:05.1f}%)\n'.format(m2_85_100, m2_85_100_rel))
+            f.write('Уровни (по выборке)\n')
+            f.write('000-015%: {:03d} ({:05.1f}%)\n'.format(n2_0_15, n2_0_15_rel))
+            f.write('015-025%: {:03d} ({:05.1f}%)\n'.format(n2_15_25, n2_15_25_rel))
+            f.write('025-050%: {:03d} ({:05.1f}%)\n'.format(n2_25_50, n2_25_50_rel))
+            f.write('050-075%: {:03d} ({:05.1f}%)\n'.format(n2_50_75, n2_50_75_rel))
+            f.write('075-085%: {:03d} ({:05.1f}%)\n'.format(n2_75_85, n2_75_85_rel))
+            f.write('085-100%: {:03d} ({:05.1f}%)\n'.format(n2_85_100, n2_85_100_rel))
+
+        return df_social_mean, df_inst_mean
 
 
 if __name__ == '__main__':

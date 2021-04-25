@@ -244,7 +244,12 @@ class Processor:
             s = 200 if i < n_top - 1 else 20
             plt.scatter(df.loc[city, 'lon'], df.loc[city, 'lat'], c='red', s=s, alpha=1)
             if i < n_top - 1:
-                plt.text(df.loc[city, 'lon'] + 1, df.loc[city, 'lat'], city, color='black',
+                city_label = city
+                if city == 'Ростовская область':
+                    city_label = 'Ростов-на-Дону'
+                elif city == 'Краснодарский край':
+                    city_label = 'Краснодар'
+                plt.text(df.loc[city, 'lon'] + 1, df.loc[city, 'lat'], city_label, color='black',
                          fontsize=20, zorder=1)
         plt.xticks([])
         plt.yticks([])

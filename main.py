@@ -10,6 +10,7 @@ from os import remove
 import numpy as np
 from numpy import mean, std, sqrt, nan
 from scipy.stats import shapiro
+import xlsxwriter
 
 from matplotlib import rc
 rc('font', **{'family': 'serif', 'serif': ['Computer Modern Roman']})
@@ -21,9 +22,22 @@ rc('text.latex', preamble=r'\usepackage[russian]{babel}')
 class Processor:
     def __init__(self, **kwargs):
         self.__path_to_xlsx = kwargs['path_to_xlsx']
+        self.__features_words = {}
 
-        self.__path_to_all = 'all.txt'
-        self.__path_to_z, self.__path_to_y, self.__path_to_x = 'Z.txt', 'Y.txt', 'X.txt'
+        self.__path_to_all = 'all'
+        self.__path_to_z, self.__path_to_y, self.__path_to_x = 'Z', 'Y', 'X'
+        self.__k_all, self.__k_z, self.__k_y, self.__k_x = 0, 0, 0, 0
+
+        self.__workbook = xlsxwriter.Workbook('results.xlsx')
+        self.__silver_cell = self.__workbook.add_format({'bg_color': 'silver', 'bold': True})
+        self.__bold_cell = self.__workbook.add_format({'bold': True})
+        self.__worksheet_all, self.__worksheet_z, self.__worksheet_y, self.__worksheet_x = \
+            self.__workbook.add_worksheet('Все поколения'), self.__workbook.add_worksheet('Поколение Z'), \
+            self.__workbook.add_worksheet('Поколение Y'), self.__workbook.add_worksheet('Поколение X')
+        self.__worksheet_all.set_column(0, 0, 200)
+        self.__worksheet_z.set_column(0, 0, 200)
+        self.__worksheet_y.set_column(0, 0, 200)
+        self.__worksheet_x.set_column(0, 0, 200)
 
         self.__clear_previous()
 
@@ -60,39 +74,39 @@ class Processor:
 
         # all
         df_statements1, df_statements2, df_statements, df_belief, df_social = self.__split_by_questions(df)
-        self.__calculate_core(df_statements, label='Утверждения', path_to_result=self.__path_to_all, positive_coeff=True)
-        self.__calculate_core(df_statements, label='Утверждения', path_to_result=self.__path_to_all, positive_coeff=False)
-        self.__calculate_core(df_statements1, label='Представления', path_to_result=self.__path_to_all, positive_coeff=True)
-        self.__calculate_core(df_statements1, label='Представления', path_to_result=self.__path_to_all, positive_coeff=False)
-        self.__calculate_core(df_statements2, label='Критерии', path_to_result=self.__path_to_all, positive_coeff=True)
-        self.__calculate_core(df_statements2, label='Критерии', path_to_result=self.__path_to_all, positive_coeff=False)
+        self.__k_all = self.__calculate_core(df_statements, label='Утверждения', worksheet=self.__worksheet_all, k=self.__k_all, positive_coeff=True)
+        self.__k_all = self.__calculate_core(df_statements, label='Утверждения', worksheet=self.__worksheet_all, k=self.__k_all, positive_coeff=False)
+        self.__k_all = self.__calculate_core(df_statements1, label='Представления', worksheet=self.__worksheet_all, k=self.__k_all, positive_coeff=True)
+        self.__k_all = self.__calculate_core(df_statements1, label='Представления', worksheet=self.__worksheet_all, k=self.__k_all, positive_coeff=False)
+        self.__k_all = self.__calculate_core(df_statements2, label='Критерии', worksheet=self.__worksheet_all, k=self.__k_all, positive_coeff=True)
+        self.__k_all = self.__calculate_core(df_statements2, label='Критерии', worksheet=self.__worksheet_all, k=self.__k_all, positive_coeff=False)
 
         # z
         df_z_statements1, df_z_statements2, df_z_statements, df_z_belief, df_z_social = self.__split_by_questions(df_z)
-        self.__calculate_core(df_z_statements, label='Утверждения', path_to_result=self.__path_to_z, positive_coeff=True)
-        self.__calculate_core(df_z_statements, label='Утверждения', path_to_result=self.__path_to_z, positive_coeff=False)
-        self.__calculate_core(df_z_statements1, label='Представления', path_to_result=self.__path_to_z, positive_coeff=True)
-        self.__calculate_core(df_z_statements1, label='Представления', path_to_result=self.__path_to_z, positive_coeff=False)
-        self.__calculate_core(df_z_statements2, label='Критерии', path_to_result=self.__path_to_z, positive_coeff=True)
-        self.__calculate_core(df_z_statements2, label='Критерии', path_to_result=self.__path_to_z, positive_coeff=False)
+        self.__k_z = self.__calculate_core(df_z_statements, label='Утверждения', worksheet=self.__worksheet_z, k=self.__k_z, positive_coeff=True)
+        self.__k_z = self.__calculate_core(df_z_statements, label='Утверждения', worksheet=self.__worksheet_z, k=self.__k_z, positive_coeff=False)
+        self.__k_z = self.__calculate_core(df_z_statements1, label='Представления', worksheet=self.__worksheet_z, k=self.__k_z, positive_coeff=True)
+        self.__k_z = self.__calculate_core(df_z_statements1, label='Представления', worksheet=self.__worksheet_z, k=self.__k_z, positive_coeff=False)
+        self.__k_z = self.__calculate_core(df_z_statements2, label='Критерии', worksheet=self.__worksheet_z, k=self.__k_z, positive_coeff=True)
+        self.__k_z = self.__calculate_core(df_z_statements2, label='Критерии', worksheet=self.__worksheet_z, k=self.__k_z, positive_coeff=False)
 
         # y
         df_y_statements1, df_y_statements2, df_y_statements, df_y_belief, df_y_social = self.__split_by_questions(df_y)
-        self.__calculate_core(df_y_statements, label='Утверждения', path_to_result=self.__path_to_y, positive_coeff=True)
-        self.__calculate_core(df_y_statements, label='Утверждения', path_to_result=self.__path_to_y, positive_coeff=False)
-        self.__calculate_core(df_y_statements1, label='Представления', path_to_result=self.__path_to_y, positive_coeff=True)
-        self.__calculate_core(df_y_statements1, label='Представления', path_to_result=self.__path_to_y, positive_coeff=False)
-        self.__calculate_core(df_y_statements2, label='Критерии', path_to_result=self.__path_to_y, positive_coeff=True)
-        self.__calculate_core(df_y_statements2, label='Критерии', path_to_result=self.__path_to_y, positive_coeff=False)
+        self.__k_y = self.__calculate_core(df_y_statements, label='Утверждения', worksheet=self.__worksheet_y, k=self.__k_y, positive_coeff=True)
+        self.__k_y = self.__calculate_core(df_y_statements, label='Утверждения', worksheet=self.__worksheet_y, k=self.__k_y, positive_coeff=False)
+        self.__k_y = self.__calculate_core(df_y_statements1, label='Представления', worksheet=self.__worksheet_y, k=self.__k_y, positive_coeff=True)
+        self.__k_y = self.__calculate_core(df_y_statements1, label='Представления', worksheet=self.__worksheet_y, k=self.__k_y, positive_coeff=False)
+        self.__k_y = self.__calculate_core(df_y_statements2, label='Критерии', worksheet=self.__worksheet_y, k=self.__k_y, positive_coeff=True)
+        self.__k_y = self.__calculate_core(df_y_statements2, label='Критерии', worksheet=self.__worksheet_y, k=self.__k_y, positive_coeff=False)
 
         # x
         df_x_statements1, df_x_statements2, df_x_statements, df_x_belief, df_x_social = self.__split_by_questions(df_x)
-        self.__calculate_core(df_x_statements, label='Утверждения', path_to_result=self.__path_to_x, positive_coeff=True)
-        self.__calculate_core(df_x_statements, label='Утверждения', path_to_result=self.__path_to_x, positive_coeff=False)
-        self.__calculate_core(df_x_statements1, label='Представления', path_to_result=self.__path_to_x, positive_coeff=True)
-        self.__calculate_core(df_x_statements1, label='Представления', path_to_result=self.__path_to_x, positive_coeff=False)
-        self.__calculate_core(df_x_statements2, label='Критерии', path_to_result=self.__path_to_x, positive_coeff=True)
-        self.__calculate_core(df_x_statements2, label='Критерии', path_to_result=self.__path_to_x, positive_coeff=False)
+        self.__k_x = self.__calculate_core(df_x_statements, label='Утверждения', worksheet=self.__worksheet_x, k=self.__k_x, positive_coeff=True)
+        self.__k_x = self.__calculate_core(df_x_statements, label='Утверждения', worksheet=self.__worksheet_x, k=self.__k_x, positive_coeff=False)
+        self.__k_x = self.__calculate_core(df_x_statements1, label='Представления', worksheet=self.__worksheet_x, k=self.__k_x, positive_coeff=True)
+        self.__k_x = self.__calculate_core(df_x_statements1, label='Представления', worksheet=self.__worksheet_x, k=self.__k_x, positive_coeff=False)
+        self.__k_x = self.__calculate_core(df_x_statements2, label='Критерии', worksheet=self.__worksheet_x, k=self.__k_x, positive_coeff=True)
+        self.__k_x = self.__calculate_core(df_x_statements2, label='Критерии', worksheet=self.__worksheet_x, k=self.__k_x, positive_coeff=False)
 
         # belief
         df_belief_mean = self.__process_belief(df_belief, self.__path_to_all, 'all_belief', plot=True)
@@ -110,7 +124,9 @@ class Processor:
         df['belief_mean'] = df_belief_mean
         df['social_mean'] = df_social_mean
         df['inst_mean'] = df_inst_mean
-        df.to_excel('all.xlsx')
+        # df.to_excel('all.xlsx')
+
+        self.__workbook.close()
 
     def __clear_previous(self):
         if exists(self.__path_to_all):
@@ -141,10 +157,20 @@ class Processor:
         with open('features.txt', 'w') as f:
             for i in range(len_base, len(columns), 1):
                 f.write('{}\n{}\n\n'.format(columns[i], df.columns[i]))
+                self.__features_words.update({columns[i]: df.columns[i]})
 
         df.columns = columns
 
         return df
+
+    def __save_process_age_to_xlsx(self, worksheet, n, n_male, n_female, k):
+        worksheet.write(k, 0, 'ЧИСЛО РЕСПОНДЕНТОВ', self.__silver_cell); k += 1
+        worksheet.write(k, 0, '{:03d}'.format(n)); k += 1
+        worksheet.write(k, 0, 'ПОЛ', self.__silver_cell); k += 1
+        worksheet.write(k, 0, 'Мужской: {:03d} ({:05.1f}%)'.format(n_male, n_male / n * 100)); k += 1
+        worksheet.write(k, 0, 'Женский: {:03d} ({:05.1f}%)'.format(n_female, n_female / n * 100)); k += 1
+
+        return k
 
     def __process_age(self, df):
         n = len(df)
@@ -167,33 +193,43 @@ class Processor:
         n_y_male, n_y_female = len(df_y_male), len(df_y_female)
         n_x_male, n_x_female = len(df_x_male), len(df_x_female)
 
-        with open(self.__path_to_all, 'a') as f:
-            f.write('Число респондентов: {:03d}\n'.format(n))
-            f.write('\n######### ПОЛ #########\n')
-            f.write('Мужской: {:03d} ({:04.2f}%)\n'.format(n_male, n_male / n * 100))
-            f.write('Женский: {:03d} ({:04.2f}%)\n'.format(n_female, n_female / n * 100))
-            f.write('\n####### ВОЗРАСТ #######\n')
-            f.write('Z: {:03d} ({:04.2f}%)\n'.format(n_z, n_z / n * 100))
-            f.write('Y: {:03d} ({:04.2f}%)\n'.format(n_y, n_y / n * 100))
-            f.write('X: {:03d} ({:04.2f}%)\n'.format(n_x, n_x / n * 100))
+        # with open(self.__path_to_all + '.txt', 'a') as f:
+        #     f.write('Число респондентов: {:03d}\n'.format(n))
+        #     f.write('\n######### ПОЛ #########\n')
+        #     f.write('Мужской: {:03d} ({:05.1f}%)\n'.format(n_male, n_male / n * 100))
+        #     f.write('Женский: {:03d} ({:05.1f}%)\n'.format(n_female, n_female / n * 100))
+        #     f.write('\n####### ВОЗРАСТ #######\n')
+        #     f.write('Z: {:03d} ({:05.1f}%)\n'.format(n_z, n_z / n * 100))
+        #     f.write('Y: {:03d} ({:05.1f}%)\n'.format(n_y, n_y / n * 100))
+        #     f.write('X: {:03d} ({:05.1f}%)\n'.format(n_x, n_x / n * 100))
 
-        with open(self.__path_to_z, 'a') as f:
-            f.write('Число респондентов: {:03d}\n'.format(n_z))
-            f.write('\n######### ПОЛ #########\n')
-            f.write('Мужской пол: {:03d} ({:04.2f}%)\n'.format(n_z_male, n_z_male / n_z * 100))
-            f.write('Женский пол: {:03d} ({:04.2f}%)\n'.format(n_z_female, n_z_female / n_z * 100))
+        self.__k_all = self.__save_process_age_to_xlsx(self.__worksheet_all, n, n_male, n_female, self.__k_all)
+        self.__worksheet_all.write(self.__k_all, 0, 'ВОЗРАСТ', self.__silver_cell); self.__k_all += 1
+        self.__worksheet_all.write(self.__k_all, 0, 'Z: {:03d} ({:05.1f}%)'.format(n_z, n_z / n * 100)); self.__k_all += 1
+        self.__worksheet_all.write(self.__k_all, 0, 'Y: {:03d} ({:05.1f}%)'.format(n_y, n_y / n * 100)); self.__k_all += 1
+        self.__worksheet_all.write(self.__k_all, 0, 'X: {:03d} ({:05.1f}%)'.format(n_x, n_x / n * 100)); self.__k_all += 1
 
-        with open(self.__path_to_y, 'a') as f:
-            f.write('Число респондентов: {:03d}\n'.format(n_y))
-            f.write('\n######### ПОЛ #########\n')
-            f.write('Мужской пол: {:03d} ({:04.2f}%)\n'.format(n_y_male, n_y_male / n_y * 100))
-            f.write('Женский пол: {:03d} ({:04.2f}%)\n'.format(n_y_female, n_y_female / n_y * 100))
+        # with open(self.__path_to_z + '.txt', 'a') as f:
+        #     f.write('Число респондентов: {:03d}\n'.format(n_z))
+        #     f.write('\n######### ПОЛ #########\n')
+        #     f.write('Мужской пол: {:03d} ({:04.2f}%)\n'.format(n_z_male, n_z_male / n_z * 100))
+        #     f.write('Женский пол: {:03d} ({:04.2f}%)\n'.format(n_z_female, n_z_female / n_z * 100))
 
-        with open(self.__path_to_x, 'a') as f:
-            f.write('Число респондентов: {:03d}\n'.format(n_x))
-            f.write('\n######### ПОЛ #########\n')
-            f.write('Мужской пол: {:03d} ({:04.2f}%)\n'.format(n_x_male, n_x_male / n_x * 100))
-            f.write('Женский пол: {:03d} ({:04.2f}%)\n'.format(n_x_female, n_x_female / n_x * 100))
+        self.__k_z = self.__save_process_age_to_xlsx(self.__worksheet_z, n_z, n_z_male, n_z_female, self.__k_z)
+        self.__k_y = self.__save_process_age_to_xlsx(self.__worksheet_y, n_y, n_y_male, n_y_female, self.__k_y)
+        self.__k_x = self.__save_process_age_to_xlsx(self.__worksheet_x, n_x, n_x_male, n_x_female, self.__k_x)
+
+        # with open(self.__path_to_y + '.txt', 'a') as f:
+        #     f.write('Число респондентов: {:03d}\n'.format(n_y))
+        #     f.write('\n######### ПОЛ #########\n')
+        #     f.write('Мужской пол: {:03d} ({:04.2f}%)\n'.format(n_y_male, n_y_male / n_y * 100))
+        #     f.write('Женский пол: {:03d} ({:04.2f}%)\n'.format(n_y_female, n_y_female / n_y * 100))
+        #
+        # with open(self.__path_to_x + '.txt', 'a') as f:
+        #     f.write('Число респондентов: {:03d}\n'.format(n_x))
+        #     f.write('\n######### ПОЛ #########\n')
+        #     f.write('Мужской пол: {:03d} ({:04.2f}%)\n'.format(n_x_male, n_x_male / n_x * 100))
+        #     f.write('Женский пол: {:03d} ({:04.2f}%)\n'.format(n_x_female, n_x_female / n_x * 100))
 
         return df_z, df_y, df_x
 
@@ -438,8 +474,7 @@ class Processor:
 
         return df_statements1, df_statements2, df_statements, df_belief, df_social
 
-    @staticmethod
-    def __calculate_core(df, label, path_to_result, positive_coeff=True):
+    def __calculate_core(self, df, label, worksheet, k, positive_coeff=True):
         if positive_coeff:
             target_answers = (1, 2)
         else:
@@ -471,29 +506,34 @@ class Processor:
         precore.sort(key=lambda x: x[1], reverse=True)
         periphery.sort(key=lambda x: x[1], reverse=True)
 
-        with open(path_to_result, 'a') as f:
-            if positive_coeff:
-                f.write('\n######### КПО: {} #########\n'.format(label))
-            else:
-                f.write('\n######### КНО: {} #########\n'.format(label))
-            f.write('Число утверждений: {:03d}\n'.format(n_features))
-            for i in range(n_features):
-                f.write('{}: {:04.1f}\n'.format(features[i], coeff_pos[i]))
-            f.write('Математическое ожидание M: {:04.1f}\n'.format(mean_coeff))
-            f.write('Стандартное отклонение s: {:04.1f}\n'.format(sigma_coeff))
-            f.write('Граница M + s: {:04.1f}\n'.format(mean_coeff + sigma_coeff))
-            f.write('ЯДРО:\n')
-            f.write('Число утверждений: {:03d} ({:04.1f}%)\n'.format(len(core), len(core) / n_features * 100))
-            for i in range(len(core)):
-                f.write('{}: {:03.1f}\n'.format(core[i][0], core[i][1]))
-            f.write('ПЕРИФЕРИЯ, БЛИЗКАЯ К ЯДРУ:\n')
-            f.write('Число утверждений: {:03d} ({:04.1f}%)\n'.format(len(precore), len(precore) / n_features * 100))
-            for i in range(len(precore)):
-                f.write('{}: {:04.1f}\n'.format(precore[i][0], precore[i][1]))
-            f.write('ПЕРИФЕРИЯ:\n')
-            f.write('Число утверждений: {:03d} ({:04.1f}%)\n'.format(len(periphery), len(periphery) / n_features * 100))
-            for i in range(len(periphery)):
-                f.write('{}: {:04.1f}\n'.format(periphery[i][0], periphery[i][1]))
+        if positive_coeff:
+            worksheet.write(k, 0, 'КОЭФФИЦИЕНТЫ ПОЗИТИВНЫХ ОТВЕТОВ: {}'.format(label), self.__silver_cell); k += 1
+        else:
+            worksheet.write(k, 0, 'КОЭФФИЦИЕНТЫ НЕГАТИВНЫХ ОТВЕТОВ: {}'.format(label), self.__silver_cell); k += 1
+        worksheet.write(k, 0, 'Число утверждений: {:03d}'.format(n_features)); k += 1
+        for i in range(len(features)):
+            worksheet.write(k, 0, '({}) {}'.format(features[i], self.__features_words[features[i]]))
+            worksheet.write(k, 1, '{:05.1f}'.format(coeff_pos[i]));
+            k += 1
+        worksheet.write(k, 0, 'Математическое ожидание M: {:05.1f}'.format(mean_coeff)); k += 1
+        worksheet.write(k, 0, 'Стандартное отклонение s: {:05.1f}'.format(sigma_coeff)); k += 1
+        worksheet.write(k, 0, 'Граница M + s: {:05.1f}'.format(mean_coeff + sigma_coeff)); k += 1
+        worksheet.write(k, 0, 'ЯДРО', self.__bold_cell); k += 1
+        worksheet.write(k, 0, 'Число утверждений: {:03d} ({:05.1f}%)'.format(len(core), len(core) / n_features * 100)); k += 1
+        for i in range(len(core)):
+            worksheet.write(k, 0, '({}) {}'.format(core[i][0], self.__features_words[core[i][0]]))
+            worksheet.write(k, 1, '{:05.1f}'.format(core[i][1])); k += 1
+        worksheet.write(k, 0, 'ПЕРИФЕРИЯ, БЛИЗКАЯ К ЯДРУ', self.__bold_cell); k += 1
+        worksheet.write(k, 0, 'Число утверждений: {:03d} ({:05.1f}%)'.format(len(precore), len(precore) / n_features * 100)); k += 1
+        for i in range(len(precore)):
+            worksheet.write(k, 0, '({}) {}'.format(precore[i][0], self.__features_words[precore[i][0]]))
+            worksheet.write(k, 1, '{:05.1f}'.format(precore[i][1])); k += 1
+        worksheet.write(k, 0, 'ПЕРИФЕРИЯ', self.__bold_cell); k += 1
+        worksheet.write(k, 0, 'Число утверждений: {:03d} ({:05.1f}%)'.format(len(periphery), len(periphery) / n_features * 100)); k += 1
+        for i in range(len(periphery)):
+            worksheet.write(k, 0, '({}) {}'.format(periphery[i][0], self.__features_words[periphery[i][0]]))
+            worksheet.write(k, 1, '{:05.1f}'.format(periphery[i][1])); k += 1
+        return k
 
     @staticmethod
     def __calculate_levels(df, min_val, max_val):
@@ -511,17 +551,17 @@ class Processor:
 
     @staticmethod
     def __preprocess_answers(df):
-        df = df.replace('Абсолютно согласен', 5)
-        df = df.replace('Согласен', 4)
+        df = df.replace('Абсолютно согласен', 1)
+        df = df.replace('Согласен', 2)
         df = df.replace('Затрудняюсь ответить', 3)
-        df = df.replace('Не согласен', 2)
-        df = df.replace('Абсолютно не согласен', 1)
+        df = df.replace('Не согласен', 4)
+        df = df.replace('Абсолютно не согласен', 5)
 
-        df = df.replace('Полностью согласен', 5)
-        df = df.replace('Скорее согласен', 4)
+        df = df.replace('Полностью согласен', 1)
+        df = df.replace('Скорее согласен', 2)
         df = df.replace('Затрудняюсь ответить', 3)
-        df = df.replace('Скорее не согласен', 2)
-        df = df.replace('Полностью не согласен', 1)
+        df = df.replace('Скорее не согласен', 4)
+        df = df.replace('Полностью не согласен', 5)
 
         return df
 
@@ -545,7 +585,7 @@ class Processor:
             = n_0_15 / n * 100, n_15_25 / n * 100, n_25_50 / n * 100, n_50_75 / n * 100, n_75_85 / n * 100, n_85_100 / n * 100
 
         stat, p = shapiro(df_mean)
-        with open(path_to_result, 'a') as f:
+        with open(path_to_result + '.txt', 'a') as f:
             f.write('\n######### ВЕРА В ЛЮДЕЙ #########\n')
             f.write('Критерий Шапиро-Уилка: {:04.3f}, p={:04.3f}\n'.format(stat, p))
             f.write('Уровни (по методике)\n')
@@ -628,7 +668,7 @@ class Processor:
 
         stat1, p1 = shapiro(df_social_mean)
         stat2, p2 = shapiro(df_inst_mean)
-        with open(path_to_result, 'a') as f:
+        with open(path_to_result + '.txt', 'a') as f:
             f.write('\n######### СОЦИАЛЬНОЕ ДОВЕРИЕ #########\n')
             f.write('Критерий Шапиро-Уилка: {:04.3f}, p={:04.3f}\n'.format(stat1, p1))
             f.write('Уровни (по методике)\n')

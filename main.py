@@ -72,59 +72,51 @@ class Processor:
         self.__x_min, self.__x_max = 38, 51
         df_z, df_y, df_x = self.__process_age(df)
 
-        # all
-        df_statements1, df_statements2, df_statements, df_belief, df_social = self.__split_by_questions(df)
-        self.__k_all = self.__calculate_core(df_statements, label='Утверждения', worksheet=self.__worksheet_all, k=self.__k_all, positive_coeff=True)
-        self.__k_all = self.__calculate_core(df_statements, label='Утверждения', worksheet=self.__worksheet_all, k=self.__k_all, positive_coeff=False)
-        self.__k_all = self.__calculate_core(df_statements1, label='Представления', worksheet=self.__worksheet_all, k=self.__k_all, positive_coeff=True)
-        self.__k_all = self.__calculate_core(df_statements1, label='Представления', worksheet=self.__worksheet_all, k=self.__k_all, positive_coeff=False)
-        self.__k_all = self.__calculate_core(df_statements2, label='Критерии', worksheet=self.__worksheet_all, k=self.__k_all, positive_coeff=True)
-        self.__k_all = self.__calculate_core(df_statements2, label='Критерии', worksheet=self.__worksheet_all, k=self.__k_all, positive_coeff=False)
+        dfs = {'all': [], 'z': [], 'y': [], 'x': []}
 
-        # z
-        df_z_statements1, df_z_statements2, df_z_statements, df_z_belief, df_z_social = self.__split_by_questions(df_z)
-        self.__k_z = self.__calculate_core(df_z_statements, label='Утверждения', worksheet=self.__worksheet_z, k=self.__k_z, positive_coeff=True)
-        self.__k_z = self.__calculate_core(df_z_statements, label='Утверждения', worksheet=self.__worksheet_z, k=self.__k_z, positive_coeff=False)
-        self.__k_z = self.__calculate_core(df_z_statements1, label='Представления', worksheet=self.__worksheet_z, k=self.__k_z, positive_coeff=True)
-        self.__k_z = self.__calculate_core(df_z_statements1, label='Представления', worksheet=self.__worksheet_z, k=self.__k_z, positive_coeff=False)
-        self.__k_z = self.__calculate_core(df_z_statements2, label='Критерии', worksheet=self.__worksheet_z, k=self.__k_z, positive_coeff=True)
-        self.__k_z = self.__calculate_core(df_z_statements2, label='Критерии', worksheet=self.__worksheet_z, k=self.__k_z, positive_coeff=False)
+        for name in dfs.keys():
+            if name == 'all':
+                df_cur, k, worksheet = df, self.__k_all, self.__worksheet_all
+            elif name == 'z':
+                df_cur, k, worksheet = df_z, self.__k_z, self.__worksheet_z
+            elif name == 'y':
+                df_cur, k, worksheet = df_y, self.__k_y, self.__worksheet_y
+            elif name == 'x':
+                df_cur, k, worksheet = df_x, self.__k_x, self.__worksheet_x
 
-        # y
-        df_y_statements1, df_y_statements2, df_y_statements, df_y_belief, df_y_social = self.__split_by_questions(df_y)
-        self.__k_y = self.__calculate_core(df_y_statements, label='Утверждения', worksheet=self.__worksheet_y, k=self.__k_y, positive_coeff=True)
-        self.__k_y = self.__calculate_core(df_y_statements, label='Утверждения', worksheet=self.__worksheet_y, k=self.__k_y, positive_coeff=False)
-        self.__k_y = self.__calculate_core(df_y_statements1, label='Представления', worksheet=self.__worksheet_y, k=self.__k_y, positive_coeff=True)
-        self.__k_y = self.__calculate_core(df_y_statements1, label='Представления', worksheet=self.__worksheet_y, k=self.__k_y, positive_coeff=False)
-        self.__k_y = self.__calculate_core(df_y_statements2, label='Критерии', worksheet=self.__worksheet_y, k=self.__k_y, positive_coeff=True)
-        self.__k_y = self.__calculate_core(df_y_statements2, label='Критерии', worksheet=self.__worksheet_y, k=self.__k_y, positive_coeff=False)
+            # df_statements1, df_statements2, df_statements, df_belief, df_social = self.__split_by_questions(df_cur)
+            # k = self.__calculate_core(df_statements, label='Утверждения', worksheet=worksheet, k=k, positive_coeff=pos_coeff)
+            # k = self.__calculate_core(df_statements, label='Утверждения', worksheet=worksheet, k=k,
+            #                           positive_coeff=False)
+            # k = self.__calculate_core(df_statements1, label='Представления', worksheet=worksheet, k=k,
+            #                           positive_coeff=True)
+            # k = self.__calculate_core(df_statements1, label='Представления', worksheet=worksheet, k=k,
+            #                           positive_coeff=False)
+            # k = self.__calculate_core(df_statements2, label='Критерии', worksheet=worksheet, k=k, positive_coeff=True)
+            # k = self.__calculate_core(df_statements2, label='Критерии', worksheet=worksheet, k=k, positive_coeff=False)
+            dfs_st, df_belief, df_social = self.__split_by_questions(df_cur)
+            for df_st in dfs_st:
+                for pos_coeff in (True, False):
+                    k = self.__calculate_core(df_st[1], label=df_st[0], worksheet=worksheet, k=k, positive_coeff=pos_coeff)
+                dfs[name] += [df_st]
 
-        # x
-        df_x_statements1, df_x_statements2, df_x_statements, df_x_belief, df_x_social = self.__split_by_questions(df_x)
-        self.__k_x = self.__calculate_core(df_x_statements, label='Утверждения', worksheet=self.__worksheet_x, k=self.__k_x, positive_coeff=True)
-        self.__k_x = self.__calculate_core(df_x_statements, label='Утверждения', worksheet=self.__worksheet_x, k=self.__k_x, positive_coeff=False)
-        self.__k_x = self.__calculate_core(df_x_statements1, label='Представления', worksheet=self.__worksheet_x, k=self.__k_x, positive_coeff=True)
-        self.__k_x = self.__calculate_core(df_x_statements1, label='Представления', worksheet=self.__worksheet_x, k=self.__k_x, positive_coeff=False)
-        self.__k_x = self.__calculate_core(df_x_statements2, label='Критерии', worksheet=self.__worksheet_x, k=self.__k_x, positive_coeff=True)
-        self.__k_x = self.__calculate_core(df_x_statements2, label='Критерии', worksheet=self.__worksheet_x, k=self.__k_x, positive_coeff=False)
-
-        # belief
-        df_belief_mean = self.__process_belief(df_belief, self.__path_to_all, 'all_belief', plot=True)
-        df_z_belief_mean = self.__process_belief(df_z_belief, self.__path_to_z, 'z_belief', plot=True)
-        df_y_belief_mean = self.__process_belief(df_y_belief, self.__path_to_y, 'y_belief', plot=True)
-        df_x_belief_mean = self.__process_belief(df_x_belief, self.__path_to_x, 'x_belief', plot=True)
-
-        # social
-        df_social_mean, df_inst_mean = self.__process_social(df_social, self.__path_to_all, 'all_social', plot=True)
-        df_z_social_mean, df_z_inst_mean = self.__process_social(df_z_social, self.__path_to_z, 'z_social', plot=True)
-        df_y_social_mean, df_y_inst_mean = self.__process_social(df_y_social, self.__path_to_y, 'y_social', plot=True)
-        df_x_social_mean, df_x_inst_mean = self.__process_social(df_x_social, self.__path_to_x, 'x_social', plot=True)
-
-        # save excel for all
-        df['belief_mean'] = df_belief_mean
-        df['social_mean'] = df_social_mean
-        df['inst_mean'] = df_inst_mean
-        # df.to_excel('all.xlsx')
+        # # belief
+        # df_belief_mean = self.__process_belief(df_belief, self.__path_to_all, 'all_belief', plot=True)
+        # df_z_belief_mean = self.__process_belief(df_z_belief, self.__path_to_z, 'z_belief', plot=True)
+        # df_y_belief_mean = self.__process_belief(df_y_belief, self.__path_to_y, 'y_belief', plot=True)
+        # df_x_belief_mean = self.__process_belief(df_x_belief, self.__path_to_x, 'x_belief', plot=True)
+        #
+        # # social
+        # df_social_mean, df_inst_mean = self.__process_social(df_social, self.__path_to_all, 'all_social', plot=True)
+        # df_z_social_mean, df_z_inst_mean = self.__process_social(df_z_social, self.__path_to_z, 'z_social', plot=True)
+        # df_y_social_mean, df_y_inst_mean = self.__process_social(df_y_social, self.__path_to_y, 'y_social', plot=True)
+        # df_x_social_mean, df_x_inst_mean = self.__process_social(df_x_social, self.__path_to_x, 'x_social', plot=True)
+        #
+        # # save excel for all
+        # df['belief_mean'] = df_belief_mean
+        # df['social_mean'] = df_social_mean
+        # df['inst_mean'] = df_inst_mean
+        # # df.to_excel('all.xlsx')
 
         self.__workbook.close()
 
@@ -463,16 +455,32 @@ class Processor:
         plt.savefig('map.png', bbox_inches='tight', dpi=200)
 
     def __split_by_questions(self, df):
-        # first_qq = ['{:03d}'.format(i) for i in range(1, 7, 1)]
-        statements1 = ['{:03d}'.format(i) for i in range(self.__n_statements1_min, self.__n_statements1_max + 1, 1)]
-        statements2 = ['{:03d}'.format(i) for i in range(self.__n_statements2_min, self.__n_statements2_max + 1, 1)]
+        # statements1 = ['{:03d}'.format(i) for i in range(self.__n_statements1_min, self.__n_statements1_max + 1, 1)]
+        # statements2 = ['{:03d}'.format(i) for i in range(self.__n_statements2_min, self.__n_statements2_max + 1, 1)]
+
+        st1 = ['Оценка', ['{:03d}'.format(i) for i in range(7, 15, 1)] + ['{:03d}'.format(i) for i in range(22, 36, 1)]
+               + ['046'] + ['{:03d}'.format(i) for i in range(75, 80, 1)] + ['081', '082']]
+        st2 = ['Причины', ['{:03d}'.format(i) for i in range(15, 22, 1)] + ['{:03d}'.format(i) for i in range(49, 75, 1)]
+               + ['080'] + ['{:03d}'.format(i) for i in range(83, 86, 1)]]
+        st3 = ['Отношения', ['{:03d}'.format(i) for i in range(36, 46, 1)] + ['047', '048'] + ['091', '092']]
+        st4 = ['Критерии', ['{:03d}'.format(i) for i in range(93, 118, 1)]]
+        st_all = ['Утверждения', st1[1] + st2[1] + st3[1] + st4[1]]
+        sts = [st_all, st1, st2, st3, st4]
+
         belief = ['{:03d}'.format(i) for i in range(self.__n_belief_min, self.__n_belief_max + 1, 1)]
         social = ['{:03d}'.format(i) for i in range(self.__n_social_min, self.__n_social_max + 1, 1)]
 
-        df_statements1, df_statements2, df_statements, df_belief, df_social = \
-            df[statements1], df[statements2], df[statements1 + statements2], df[belief], df[social]
+        dfs_st = []
+        for st in sts:
+            df_selected = df[st[1]]
+            dfs_st.append((st[0], df_selected))
 
-        return df_statements1, df_statements2, df_statements, df_belief, df_social
+        df_belief, df_social = df[belief], df[social]
+
+        # df_statements1, df_statements2, df_statements, df_belief, df_social = \
+        #     df[statements1], df[statements2], df[statements1 + statements2], df[belief], df[social]
+
+        return dfs_st, df_belief, df_social
 
     def __calculate_core(self, df, label, worksheet, k, positive_coeff=True):
         if positive_coeff:

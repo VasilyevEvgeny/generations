@@ -11,12 +11,18 @@ import numpy as np
 from numpy import mean, std, sqrt, nan
 from scipy.stats import shapiro
 import xlsxwriter
+import hdbscan
+from sklearn.manifold import TSNE
 
-from matplotlib import rc
+from matplotlib import rc, cm
 rc('font', **{'family': 'serif', 'serif': ['Computer Modern Roman']})
 rc('text', usetex=True)
 rc('text.latex', preamble=r'\usepackage[utf8]{inputenc}')
 rc('text.latex', preamble=r'\usepackage[russian]{babel}')
+
+pd.set_option('display.max_columns', None)
+pd.set_option('display.expand_frame_repr', False)
+pd.set_option('max_colwidth', 1000)
 
 
 class Processor:
@@ -117,6 +123,8 @@ class Processor:
         # df['social_mean'] = df_social_mean
         # df['inst_mean'] = df_inst_mean
         # # df.to_excel('all.xlsx')
+
+        self.__clusterize(df)
 
         self.__workbook.close()
 
@@ -711,6 +719,75 @@ class Processor:
             f.write('085-100%: {:03d} ({:05.1f}%)\n'.format(n2_85_100, n2_85_100_rel))
 
         return df_social_mean, df_inst_mean
+
+    @staticmethod
+    def __normalize_scale_1_to_5(col):
+        col = 2 * ((col - 1) / 4 - 0.5)
+
+        return col
+
+
+    def __clusterize(self, df):
+        #
+        # preprocessing and normalization
+        #
+
+        # delete some columns
+        df = df.drop(['time', 'education_profile', 'city', '001', '003', '004', '005', '006'], axis=1)
+
+        # age
+        min_age, max_age = np.min(df['age']), np.max(df['age'])
+        df['age'] = 2 * ((df['age'] - min_age) / (max_age - min_age) - 0.5)
+
+        # sex
+        df['sex'] = df['sex'].replace('Женский', -1)
+        df['sex'] = df['sex'].replace('Мужской', 1)
+
+        # education_level
+        df['education_level'] = df['education_level'].replace('Неполное среднее образование', 1)
+        df['education_level'] = df['education_level'].replace('Среднее образование', 2)
+        df['education_level'] = df['education_level'].replace('Среднее специальное образование', 3)
+        df['education_level'] = df['education_level'].replace('Неполное высшее образование', 4)
+        df['education_level'] = df['education_level'].replace('Высшее образование', 5)
+        df['education_level'] = self.__normalize_scale_1_to_5(df['education_level'])
+
+        # 002
+        df['002'] = df['002'].replace('Много раз в день', 1)
+        df['002'] = df['002'].replace('1-2 раза в день', 2)
+        df['002'] = df['002'].replace('Несколько раз в неделю', 3)
+        df['002'] = df['002'].replace('Раз в неделю', 4)
+        df['002'] = df['002'].replace('Реже', 5)
+        df['002'] = self.__normalize_scale_1_to_5(df['002'])
+
+        for i in range(7, 135, 1):
+            col_name = '{:03d}'.format(i)
+            df[col_name] = self.__normalize_scale_1_to_5(df[col_name])
+
+        #
+        # clusterization
+        #
+
+        X = TSNE(n_components=2).fit_transform(df)
+
+        clusterer = hdbscan.HDBSCAN(min_cluster_size=10)
+        clusterer.fit(X)
+
+        labels = clusterer.labels_
+        min_label = np.min(labels)
+        for i in range(len(df)):
+            labels[i] -= min_label
+
+        n_colors = len(np.unique(clusterer.labels_))
+        cmap = cm.get_cmap('jet')
+        colors = []
+        for i in range(n_colors):
+            colors.append(cmap((i + 0.5) / n_colors))
+
+        plt.figure(figsize=(10, 10))
+        for i in range(X.shape[0]):
+            plt.scatter(X[i, 0], X[i, 1], s=100, color=colors[labels[i]])
+        plt.savefig('clusterization.png', bbox_inches='tight', dpi=200)
+        plt.close()
 
 
 if __name__ == '__main__':

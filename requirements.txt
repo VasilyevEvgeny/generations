@@ -12,3 +12,5 @@ shapely
 geopandas
 scipy
 xlsxwriter
+hdbscan
+scikit-learn

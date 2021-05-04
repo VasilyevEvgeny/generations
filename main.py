@@ -78,6 +78,12 @@ class Processor:
         self.__x_min, self.__x_max = 38, 51
         df_z, df_y, df_x = self.__process_age(df)
 
+        # doubters
+        self.__k_all = self.__save_doubters_to_xlsx(self.__worksheet_all, df, self.__k_all)
+        self.__k_z = self.__save_doubters_to_xlsx(self.__worksheet_z, df_z, self.__k_z)
+        self.__k_y = self.__save_doubters_to_xlsx(self.__worksheet_y, df_y, self.__k_y)
+        self.__k_x = self.__save_doubters_to_xlsx(self.__worksheet_x, df_x, self.__k_x)
+
         dfs = {'all': [], 'z': [], 'y': [], 'x': []}
 
         for name in dfs.keys():
@@ -90,16 +96,6 @@ class Processor:
             elif name == 'x':
                 df_cur, k, worksheet = df_x, self.__k_x, self.__worksheet_x
 
-            # df_statements1, df_statements2, df_statements, df_belief, df_social = self.__split_by_questions(df_cur)
-            # k = self.__calculate_core(df_statements, label='Утверждения', worksheet=worksheet, k=k, positive_coeff=pos_coeff)
-            # k = self.__calculate_core(df_statements, label='Утверждения', worksheet=worksheet, k=k,
-            #                           positive_coeff=False)
-            # k = self.__calculate_core(df_statements1, label='Представления', worksheet=worksheet, k=k,
-            #                           positive_coeff=True)
-            # k = self.__calculate_core(df_statements1, label='Представления', worksheet=worksheet, k=k,
-            #                           positive_coeff=False)
-            # k = self.__calculate_core(df_statements2, label='Критерии', worksheet=worksheet, k=k, positive_coeff=True)
-            # k = self.__calculate_core(df_statements2, label='Критерии', worksheet=worksheet, k=k, positive_coeff=False)
             dfs_st, df_belief, df_social = self.__split_by_questions(df_cur)
             for df_st in dfs_st:
                 for pos_coeff in (True, False):
@@ -146,6 +142,7 @@ class Processor:
             for i in range(len(col)):
                 if col[i] is nan or col[i] is None or col[i] == '':
                     # to_drop.append((i, feature))
+                    print(df.loc[i, :].head(50))
                     raise Exception('Empty cell in ({:03d}, {})'.format(i, feature))
         # print(to_drop)
 
@@ -172,6 +169,26 @@ class Processor:
 
         return k
 
+    @staticmethod
+    def __calculate_doubters(df):
+        doubters = []
+        for col_name in df.columns[12:]:
+            n_doubters = len(df[(df[col_name] == 'Затрудняюсь ответить') | (df[col_name] == 3)])
+            percent = n_doubters / len(df) * 100
+            doubters.append((col_name, n_doubters, percent))
+
+        return doubters
+
+    def __save_doubters_to_xlsx(self, worksheet, df, k):
+        doubters = self.__calculate_doubters(df)
+        worksheet.write(k, 0, 'ЧИСЛО ЗАТРУДНИВШИХСЯ ОТВЕТИТЬ', self.__silver_cell); k += 1
+        for i in range(len(doubters)):
+            worksheet.write(k, 0, '({}) {}'.format(doubters[i][0], self.__features_words[doubters[i][0]]))
+            worksheet.write(k, 1, '{:03d}'.format(doubters[i][1]))
+            worksheet.write(k, 2, '{:05.1f}'.format(doubters[i][2])); k += 1
+
+        return k
+
     def __process_age(self, df):
         n = len(df)
 
@@ -193,43 +210,17 @@ class Processor:
         n_y_male, n_y_female = len(df_y_male), len(df_y_female)
         n_x_male, n_x_female = len(df_x_male), len(df_x_female)
 
-        # with open(self.__path_to_all + '.txt', 'a') as f:
-        #     f.write('Число респондентов: {:03d}\n'.format(n))
-        #     f.write('\n######### ПОЛ #########\n')
-        #     f.write('Мужской: {:03d} ({:05.1f}%)\n'.format(n_male, n_male / n * 100))
-        #     f.write('Женский: {:03d} ({:05.1f}%)\n'.format(n_female, n_female / n * 100))
-        #     f.write('\n####### ВОЗРАСТ #######\n')
-        #     f.write('Z: {:03d} ({:05.1f}%)\n'.format(n_z, n_z / n * 100))
-        #     f.write('Y: {:03d} ({:05.1f}%)\n'.format(n_y, n_y / n * 100))
-        #     f.write('X: {:03d} ({:05.1f}%)\n'.format(n_x, n_x / n * 100))
-
         self.__k_all = self.__save_process_age_to_xlsx(self.__worksheet_all, n, n_male, n_female, self.__k_all)
         self.__worksheet_all.write(self.__k_all, 0, 'ВОЗРАСТ', self.__silver_cell); self.__k_all += 1
         self.__worksheet_all.write(self.__k_all, 0, 'Z: {:03d} ({:05.1f}%)'.format(n_z, n_z / n * 100)); self.__k_all += 1
         self.__worksheet_all.write(self.__k_all, 0, 'Y: {:03d} ({:05.1f}%)'.format(n_y, n_y / n * 100)); self.__k_all += 1
         self.__worksheet_all.write(self.__k_all, 0, 'X: {:03d} ({:05.1f}%)'.format(n_x, n_x / n * 100)); self.__k_all += 1
 
-        # with open(self.__path_to_z + '.txt', 'a') as f:
-        #     f.write('Число респондентов: {:03d}\n'.format(n_z))
-        #     f.write('\n######### ПОЛ #########\n')
-        #     f.write('Мужской пол: {:03d} ({:04.2f}%)\n'.format(n_z_male, n_z_male / n_z * 100))
-        #     f.write('Женский пол: {:03d} ({:04.2f}%)\n'.format(n_z_female, n_z_female / n_z * 100))
-
         self.__k_z = self.__save_process_age_to_xlsx(self.__worksheet_z, n_z, n_z_male, n_z_female, self.__k_z)
         self.__k_y = self.__save_process_age_to_xlsx(self.__worksheet_y, n_y, n_y_male, n_y_female, self.__k_y)
         self.__k_x = self.__save_process_age_to_xlsx(self.__worksheet_x, n_x, n_x_male, n_x_female, self.__k_x)
 
-        # with open(self.__path_to_y + '.txt', 'a') as f:
-        #     f.write('Число респондентов: {:03d}\n'.format(n_y))
-        #     f.write('\n######### ПОЛ #########\n')
-        #     f.write('Мужской пол: {:03d} ({:04.2f}%)\n'.format(n_y_male, n_y_male / n_y * 100))
-        #     f.write('Женский пол: {:03d} ({:04.2f}%)\n'.format(n_y_female, n_y_female / n_y * 100))
-        #
-        # with open(self.__path_to_x + '.txt', 'a') as f:
-        #     f.write('Число респондентов: {:03d}\n'.format(n_x))
-        #     f.write('\n######### ПОЛ #########\n')
-        #     f.write('Мужской пол: {:03d} ({:04.2f}%)\n'.format(n_x_male, n_x_male / n_x * 100))
-        #     f.write('Женский пол: {:03d} ({:04.2f}%)\n'.format(n_x_female, n_x_female / n_x * 100))
+
 
         return df_z, df_y, df_x
 
@@ -245,7 +236,7 @@ class Processor:
             if city in ('москва', 'Филадельфия', 'Дублин', 'Париж', 'Зеленоград',
                         'Ваймар', 'Хельсинки', 'Алматы', 'сасква', 'Алма-Ата',
                         'Москва, последний год - Тульская область, г Суворов. (мб можно его указать, чтобы не все были из мск))) )',
-                        'страна Казахстан, город Атырау', 'Бостон, США'):
+                        'страна Казахстан, город Атырау', 'Бостон, США', 'Moscow', 'Италия'):
                 city = 'Москва'
             elif city in ('Одинцово', 'Люберцы', 'Ступино', 'Ступино московской обл',
                           'Мытищи', 'Химки', 'Балашиха', 'Ступино Московской области',
@@ -253,9 +244,9 @@ class Processor:
                           'Ступино Московской обл', 'Серпухов', 'Котельники', 'Сергиев Посад'):
                 city = 'Московская область'
             elif city in ('Волгодонск', 'Волгодоск', 'Ростовская обл', 'Живу в деревне', 'Азов', 'Волгодонск Ростовская обл.',
-                          'Ростов-на-Дону'):
+                          'Ростов-на-Дону', 'Ростов на Дону'):
                 city = 'Ростовская область'
-            elif city in ('питер', 'Ереван', 'Санкт петеобург', 'Санкт-Перетбург', 'СПб', 'Вентспилс', 'Волхов'):
+            elif city in ('питер', 'Ереван', 'Санкт петеобург', 'Санкт-Перетбург', 'СПб', 'Вентспилс', 'Волхов', 'Минск'):
                 city = 'Санкт-Петербург'
             elif city in ('райцентр Курской области'):
                 city = 'Курск'
@@ -283,6 +274,12 @@ class Processor:
                 city = 'Саратов'
             elif city in ('Усть-Кан', 'Горно-Алтайск', 'Барнаул'):
                 city = 'Новосибирск'
+            elif city in ('Северодвинск'):
+                city = 'Архангельск'
+            elif city in ('Северодвинск'):
+                city = 'Архангельск'
+            elif city in ('Елец'):
+                city = 'Воронеж'
 
             df.loc[i, 'city'] = city
         df = df.drop(df.index[i_to_drop]).reset_index(drop=True)
@@ -725,7 +722,6 @@ class Processor:
         col = 2 * ((col - 1) / 4 - 0.5)
 
         return col
-
 
     def __clusterize(self, df):
         #

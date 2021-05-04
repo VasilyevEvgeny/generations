@@ -6,9 +6,10 @@ from shapely.ops import split
 from shapely.affinity import translate
 from collections import Counter
 from os.path import exists
-from os import remove
+from os import remove, mkdir
+from shutil import rmtree
 import numpy as np
-from numpy import mean, std, sqrt, nan
+from numpy import mean, std, sqrt, nan, median
 from scipy.stats import shapiro
 import xlsxwriter
 import hdbscan
@@ -78,11 +79,13 @@ class Processor:
         self.__x_min, self.__x_max = 38, 51
         df_z, df_y, df_x = self.__process_age(df)
 
-        # doubters
-        self.__k_all = self.__save_doubters_to_xlsx(self.__worksheet_all, df, self.__k_all)
-        self.__k_z = self.__save_doubters_to_xlsx(self.__worksheet_z, df_z, self.__k_z)
-        self.__k_y = self.__save_doubters_to_xlsx(self.__worksheet_y, df_y, self.__k_y)
-        self.__k_x = self.__save_doubters_to_xlsx(self.__worksheet_x, df_x, self.__k_x)
+        for func in [self.__save_education_level_to_xlsx, self.__save_news_freq_to_xlsx,
+                     self.__save_news_sources_to_xlsx, self.__save_news_sources_true_to_xlsx,
+                     self.__save_news_sources_false_to_xlsx, self.__save_doubters_to_xlsx]:
+            self.__k_all = func(**{'worksheet': self.__worksheet_all, 'df': df, 'k': self.__k_all})
+            self.__k_z = func(**{'worksheet': self.__worksheet_z, 'df': df_z, 'k': self.__k_z})
+            self.__k_y = func(**{'worksheet': self.__worksheet_y, 'df': df_y, 'k': self.__k_y})
+            self.__k_x = func(**{'worksheet': self.__worksheet_x, 'df': df_x, 'k': self.__k_x})
 
         dfs = {'all': [], 'z': [], 'y': [], 'x': []}
 
@@ -100,25 +103,37 @@ class Processor:
             for df_st in dfs_st:
                 for pos_coeff in (True, False):
                     k = self.__calculate_core(df_st[1], label=df_st[0], worksheet=worksheet, k=k, positive_coeff=pos_coeff)
-                dfs[name] += [df_st]
+                    if name == 'all':
+                        self.__k_all = k
+                    elif name == 'z':
+                        self.__k_z = k
+                    elif name == 'y':
+                        self.__k_y = k
+                    else:
+                        self.__k_x = k
+                dfs[name] += [df_st, df_belief, df_social]
 
-        # # belief
-        # df_belief_mean = self.__process_belief(df_belief, self.__path_to_all, 'all_belief', plot=True)
-        # df_z_belief_mean = self.__process_belief(df_z_belief, self.__path_to_z, 'z_belief', plot=True)
-        # df_y_belief_mean = self.__process_belief(df_y_belief, self.__path_to_y, 'y_belief', plot=True)
-        # df_x_belief_mean = self.__process_belief(df_x_belief, self.__path_to_x, 'x_belief', plot=True)
-        #
-        # # social
-        # df_social_mean, df_inst_mean = self.__process_social(df_social, self.__path_to_all, 'all_social', plot=True)
-        # df_z_social_mean, df_z_inst_mean = self.__process_social(df_z_social, self.__path_to_z, 'z_social', plot=True)
-        # df_y_social_mean, df_y_inst_mean = self.__process_social(df_y_social, self.__path_to_y, 'y_social', plot=True)
-        # df_x_social_mean, df_x_inst_mean = self.__process_social(df_x_social, self.__path_to_x, 'x_social', plot=True)
-        #
-        # # save excel for all
-        # df['belief_mean'] = df_belief_mean
-        # df['social_mean'] = df_social_mean
-        # df['inst_mean'] = df_inst_mean
-        # # df.to_excel('all.xlsx')
+        # belief
+        if exists('belief'):
+            rmtree('belief')
+        df_belief_mean, self.__k_all = self.__process_belief(self.__worksheet_all, dfs['all'][-2], self.__k_all, 'all')
+        df_z_belief_mean, self.__k_z = self.__process_belief(self.__worksheet_z, dfs['z'][-2], self.__k_z, 'z')
+        df_y_belief_mean, self.__k_y = self.__process_belief(self.__worksheet_y, dfs['y'][-2], self.__k_y, 'y')
+        df_x_belief_mean, self.__k_x = self.__process_belief(self.__worksheet_x, dfs['x'][-2], self.__k_x, 'x')
+
+        # trust
+        if exists('trust'):
+            rmtree('trust')
+        df_social_mean, df_inst_mean, self.__k_all = self.__process_trust(self.__worksheet_all, dfs['all'][-1], self.__k_all, 'all')
+        df_z_social_mean, df_z_inst_mean, self.__k_z = self.__process_trust(self.__worksheet_z, dfs['z'][-1], self.__k_z, 'z')
+        df_y_social_mean, df_y_inst_mean, self.__k_y = self.__process_trust(self.__worksheet_y, dfs['y'][-1], self.__k_y, 'y')
+        df_x_social_mean, df_x_inst_mean, self.__k_x = self.__process_trust(self.__worksheet_x, dfs['x'][-1], self.__k_x, 'x')
+
+        # save excel for all
+        df['belief_mean'] = df_belief_mean
+        df['social_mean'] = df_social_mean
+        df['inst_mean'] = df_inst_mean
+        df.to_excel('data_output.xlsx')
 
         self.__clusterize(df)
 
@@ -189,6 +204,118 @@ class Processor:
 
         return k
 
+    def __save_education_level_to_xlsx(self, worksheet, df, k):
+        n = len(df)
+        n1, n2, n3, n4, n5 = len(df[df['education_level'] == 'Неполное среднее образование']), \
+                             len(df[df['education_level'] == 'Среднее образование']), \
+                             len(df[df['education_level'] == 'Среднее специальное образование']), \
+                             len(df[df['education_level'] == 'Неполное высшее образование']), \
+                             len(df[df['education_level'] == 'Высшее образование'])
+        n1_percent, n2_percent, n3_percent, n4_percent, n5_percent = n1 / n * 100, n2 / n * 100, n3 / n * 100, \
+                                                                     n4 / n * 100, n5 / n * 100
+        worksheet.write(k, 0, 'УРОВЕНЬ ОБРАЗОВАНИЯ', self.__silver_cell); k += 1
+        worksheet.write(k, 0, 'Неполное среднее образование: {:03d} ({:05.1f}%)'.format(n1, n1_percent)); k += 1
+        worksheet.write(k, 0, 'Среднее образование: {:03d} ({:05.1f}%)'.format(n2, n2_percent)); k += 1
+        worksheet.write(k, 0, 'Среднее специальное образование: {:03d} ({:05.1f}%)'.format(n3, n3_percent)); k += 1
+        worksheet.write(k, 0, 'Неполное высшее образование: {:03d} ({:05.1f}%)'.format(n4, n4_percent)); k += 1
+        worksheet.write(k, 0, 'Высшее образование: {:03d} ({:05.1f}%)'.format(n5, n5_percent)); k += 1
+
+        return k
+
+    def __save_news_freq_to_xlsx(self, worksheet, df, k):
+        n = len(df)
+        n1, n2, n3, n4, n5 = len(df[df['002'] == 'Много раз в день']), \
+                             len(df[df['002'] == '1-2 раза в день']), \
+                             len(df[df['002'] == 'Несколько раз в неделю']), \
+                             len(df[df['002'] == 'Раз в неделю']), \
+                             len(df[df['002'] == 'Реже'])
+        n1_percent, n2_percent, n3_percent, n4_percent, n5_percent = n1 / n * 100, n2 / n * 100, n3 / n * 100, \
+                                                                     n4 / n * 100, n5 / n * 100
+        worksheet.write(k, 0, 'ЧАСТОТА ПРОСМОТРА НОВОСТЕЙ', self.__silver_cell); k += 1
+        worksheet.write(k, 0, 'Много раз в день: {:03d} ({:05.1f}%)'.format(n1, n1_percent)); k += 1
+        worksheet.write(k, 0, '1-2 раза в день: {:03d} ({:05.1f}%)'.format(n2, n2_percent)); k += 1
+        worksheet.write(k, 0, 'Несколько раз в неделю: {:03d} ({:05.1f}%)'.format(n3, n3_percent)); k += 1
+        worksheet.write(k, 0, 'Раз в неделю: {:03d} ({:05.1f}%)'.format(n4, n4_percent)); k += 1
+        worksheet.write(k, 0, 'Реже: {:03d} ({:05.1f}%)'.format(n5, n5_percent)); k += 1
+
+        return k
+
+    def __save_news_sources_to_xlsx(self, worksheet, df, k):
+        worksheet.write(k, 0, 'НОВОСТНЫЕ РЕСУРСЫ', self.__silver_cell); k += 1
+
+        n = len(df)
+        sources = [['Телевидение', 0, 0],
+                   ['Паблики/группы в социальных сетях (VK, Facebook, Instagram, Twitter, Одноклассники и др.)', 0, 0],
+                   ['Каналы в мессенджерах (телеграм, вайбер, вотсап)', 0, 0],
+                   ['Новостные сайты', 0, 0],
+                   ['Узнаю от знакомых/родственников/друзей', 0, 0],
+                   ['Радио', 0, 0],
+                   ['Газеты', 0, 0]]
+        n_sources = len(sources)
+        for s in range(n_sources):
+            # look in df
+            for i in range(n):
+                answer = df.loc[i, '001']
+                if sources[s][0] in answer:
+                    sources[s][1] += 1
+                    sources[s][2] = sources[s][1] / n * 100
+            # save to xlsx
+            worksheet.write(k, 0, '{}: {:03d} ({:05.1f}%)'.format(sources[s][0], sources[s][1], sources[s][2])); k += 1
+
+        return k
+
+    def __save_news_sources_true_to_xlsx(self, worksheet, df, k):
+        worksheet.write(k, 0, 'НОВОСТНЫЕ РЕСУРСЫ, ЗАСЛУЖИВАЮЩИЕ ДОВЕРИЕ', self.__silver_cell); k += 1
+
+        n = len(df)
+        sources = [['Телевидение в целом', 0, 0],
+                   ['Федеральные каналы по телевидению', 0, 0],
+                   ['Интернет в целом', 0, 0],
+                   ['Социальные сети', 0, 0],
+                   ['Мессенджеры', 0, 0],
+                   ['Новостные сайты', 0, 0],
+                   ['Радио', 0, 0],
+                   ['Газеты/журналы', 0, 0],
+                   ['Ничего из вышеперечисленного', 0, 0]]
+        n_sources = len(sources)
+        for s in range(n_sources):
+            # look in df
+            for i in range(n):
+                answer = df.loc[i, '005']
+                if sources[s][0] in answer:
+                    sources[s][1] += 1
+                    sources[s][2] = sources[s][1] / n * 100
+            # save to xlsx
+            worksheet.write(k, 0, '{}: {:03d} ({:05.1f}%)'.format(sources[s][0], sources[s][1], sources[s][2])); k += 1
+
+        return k
+
+    def __save_news_sources_false_to_xlsx(self, worksheet, df, k):
+        worksheet.write(k, 0, 'НОВОСТНЫЕ РЕСУРСЫ, НЕ ЗАСЛУЖИВАЮЩИЕ ДОВЕРИЕ', self.__silver_cell); k += 1
+
+        n = len(df)
+        sources = [['Телевидение в целом', 0, 0],
+                   ['Федеральные каналы по телевидению', 0, 0],
+                   ['Интернет в целом', 0, 0],
+                   ['Социальные сети', 0, 0],
+                   ['Мессенджеры', 0, 0],
+                   ['Новостные сайты', 0, 0],
+                   ['Радио', 0, 0],
+                   ['Газеты/журналы', 0, 0],
+                   ['Ничего из вышеперечисленного', 0, 0]]
+        n_sources = len(sources)
+        for s in range(n_sources):
+            # look in df
+            for i in range(n):
+                answer = df.loc[i, '006']
+                if sources[s][0] in answer:
+                    sources[s][1] += 1
+                    sources[s][2] = sources[s][1] / n * 100
+            # save to xlsx
+            worksheet.write(k, 0, '{}: {:03d} ({:05.1f}%)'.format(sources[s][0], sources[s][1], sources[s][2])); k += 1
+
+        return k
+
     def __process_age(self, df):
         n = len(df)
 
@@ -219,8 +346,6 @@ class Processor:
         self.__k_z = self.__save_process_age_to_xlsx(self.__worksheet_z, n_z, n_z_male, n_z_female, self.__k_z)
         self.__k_y = self.__save_process_age_to_xlsx(self.__worksheet_y, n_y, n_y_male, n_y_female, self.__k_y)
         self.__k_x = self.__save_process_age_to_xlsx(self.__worksheet_x, n_x, n_x_male, n_x_female, self.__k_x)
-
-
 
         return df_z, df_y, df_x
 
@@ -463,14 +588,15 @@ class Processor:
         # statements1 = ['{:03d}'.format(i) for i in range(self.__n_statements1_min, self.__n_statements1_max + 1, 1)]
         # statements2 = ['{:03d}'.format(i) for i in range(self.__n_statements2_min, self.__n_statements2_max + 1, 1)]
 
-        st1 = ['Оценка', ['{:03d}'.format(i) for i in range(7, 15, 1)] + ['{:03d}'.format(i) for i in range(22, 36, 1)]
-               + ['046'] + ['{:03d}'.format(i) for i in range(75, 80, 1)] + ['081', '082']]
-        st2 = ['Причины', ['{:03d}'.format(i) for i in range(15, 22, 1)] + ['{:03d}'.format(i) for i in range(49, 75, 1)]
-               + ['080'] + ['{:03d}'.format(i) for i in range(83, 86, 1)]]
-        st3 = ['Отношения', ['{:03d}'.format(i) for i in range(36, 46, 1)] + ['047', '048'] + ['091', '092']]
+        st1 = ['Оценка', ['{:03d}'.format(i) for i in range(7, 15, 1)] + ['{:03d}'.format(i) for i in range(22, 24, 1)]]
+        st2 = ['Причины', ['{:03d}'.format(i) for i in range(50, 75, 1)] + ['{:03d}'.format(i) for i in range(83, 86, 1)]]
+        st3 = ['Отношения', ['{:03d}'.format(i) for i in range(36, 46, 1)] + ['047'] + ['091', '092']]
         st4 = ['Критерии', ['{:03d}'.format(i) for i in range(93, 118, 1)]]
-        st_all = ['Утверждения', st1[1] + st2[1] + st3[1] + st4[1]]
-        sts = [st_all, st1, st2, st3, st4]
+        st5 = ['Про другие поколения', ['{:03d}'.format(i) for i in range(15, 22, 1)]]
+        st6 = ['Прогноз', ['{:03d}'.format(i) for i in range(24, 36, 1)]]
+        st7 = ['Действие', ['046'] + ['049'] + ['{:03d}'.format(i) for i in range(75, 83, 1)]]
+        st_all = ['Утверждения', st1[1] + st2[1] + st3[1] + st4[1] + st5[1], st6[1], st7[1]]
+        sts = [st_all, st1, st2, st3, st4, st5, st6, st7]
 
         belief = ['{:03d}'.format(i) for i in range(self.__n_belief_min, self.__n_belief_max + 1, 1)]
         social = ['{:03d}'.format(i) for i in range(self.__n_social_min, self.__n_social_max + 1, 1)]
@@ -578,14 +704,12 @@ class Processor:
 
         return df
 
-    def __process_belief(self, df, path_to_result, label, plot=False):
+    def __process_belief(self, worksheet, df, k, label):
         inversed = [86, 87, 90]
         for i in inversed:
             name = '{:03d}'.format(i)
             df.loc[:][name].replace([1, 2, 4, 5], [5, 4, 2, 1], inplace=True)
-        # df.to_excel('belief.xlsx')
         df_mean = df.mean(numeric_only=True, axis=1)
-        # df_mean.to_excel('belief_mean.xlsx')
 
         n = len(df_mean)
 
@@ -597,125 +721,131 @@ class Processor:
         n_0_15_rel, n_15_25_rel, n_25_50_rel, n_50_75_rel, n_75_85_rel, n_85_100_rel \
             = n_0_15 / n * 100, n_15_25 / n * 100, n_25_50 / n * 100, n_50_75 / n * 100, n_75_85 / n * 100, n_85_100 / n * 100
 
+        # Shapiro-Wilk
         stat, p = shapiro(df_mean)
-        with open(path_to_result + '.txt', 'a') as f:
-            f.write('\n######### ВЕРА В ЛЮДЕЙ #########\n')
-            f.write('Критерий Шапиро-Уилка: {:04.3f}, p={:04.3f}\n'.format(stat, p))
-            f.write('Уровни (по методике)\n')
-            f.write('000-015%: {:03d} ({:05.1f}%)\n'.format(m_0_15, m_0_15_rel))
-            f.write('015-025%: {:03d} ({:05.1f}%)\n'.format(m_15_25, m_15_25_rel))
-            f.write('025-050%: {:03d} ({:05.1f}%)\n'.format(m_25_50, m_25_50_rel))
-            f.write('050-075%: {:03d} ({:05.1f}%)\n'.format(m_50_75, m_50_75_rel))
-            f.write('075-085%: {:03d} ({:05.1f}%)\n'.format(m_75_85, m_75_85_rel))
-            f.write('085-100%: {:03d} ({:05.1f}%)\n'.format(m_85_100, m_85_100_rel))
-            f.write('Уровни (по выборке)\n')
-            f.write('000-015%: {:03d} ({:05.1f}%)\n'.format(n_0_15, n_0_15_rel))
-            f.write('015-025%: {:03d} ({:05.1f}%)\n'.format(n_15_25, n_15_25_rel))
-            f.write('025-050%: {:03d} ({:05.1f}%)\n'.format(n_25_50, n_25_50_rel))
-            f.write('050-075%: {:03d} ({:05.1f}%)\n'.format(n_50_75, n_50_75_rel))
-            f.write('075-085%: {:03d} ({:05.1f}%)\n'.format(n_75_85, n_75_85_rel))
-            f.write('085-100%: {:03d} ({:05.1f}%)\n'.format(n_85_100, n_85_100_rel))
 
-        if plot:
-            fig = plt.figure(figsize=(10, 10))
-            df_mean.plot.hist(bins=10, color='black', legend=False)
-            plt.xlim([1, 5])
-            plt.savefig('{}_mean.png'.format(label), bbox_inches='tight', dpi=200)
-            plt.close()
+        # save to xlsx
+        worksheet.write(k, 0, 'ВЕРА В ЛЮДЕЙ', self.__silver_cell); k += 1
+        worksheet.write(k, 0, 'Критерий Шапиро-Уилка: stat = {:05.3f}, p = {:05.3f}'.format(stat, p)); k += 1
+        worksheet.write(k, 0, 'Уровни (по методике):'); k += 1
+        worksheet.write(k, 0, '000-015%: {:03d} ({:05.1f}%)'.format(m_0_15, m_0_15_rel)); k += 1
+        worksheet.write(k, 0, '015-025%: {:03d} ({:05.1f}%)'.format(m_15_25, m_15_25_rel)); k += 1
+        worksheet.write(k, 0, '025-050%: {:03d} ({:05.1f}%)'.format(m_25_50, m_25_50_rel)); k += 1
+        worksheet.write(k, 0, '050-075%: {:03d} ({:05.1f}%)'.format(m_50_75, m_50_75_rel)); k += 1
+        worksheet.write(k, 0, '075-085%: {:03d} ({:05.1f}%)'.format(m_75_85, m_75_85_rel)); k += 1
+        worksheet.write(k, 0, '085-100%: {:03d} ({:05.1f}%)'.format(m_85_100, m_85_100_rel)); k += 1
+        worksheet.write(k, 0, 'Уровни (по выборке):'); k += 1
+        worksheet.write(k, 0, '000-015%: {:03d} ({:05.1f}%)'.format(n_0_15, n_0_15_rel)); k += 1
+        worksheet.write(k, 0, '025-050%: {:03d} ({:05.1f}%)'.format(n_15_25, n_15_25_rel)); k += 1
+        worksheet.write(k, 0, '025-050%: {:03d} ({:05.1f}%)'.format(n_25_50, n_25_50_rel)); k += 1
+        worksheet.write(k, 0, '050-075%: {:03d} ({:05.1f}%)'.format(n_50_75, n_50_75_rel)); k += 1
+        worksheet.write(k, 0, '075-085%: {:03d} ({:05.1f}%)'.format(n_75_85, n_75_85_rel)); k += 1
+        worksheet.write(k, 0, '085-100%: {:03d} ({:05.1f}%)'.format(n_85_100, n_85_100_rel)); k += 1
 
-        return df_mean
+        dirname = 'belief'
+        if not exists(dirname):
+            mkdir(dirname)
 
-    def __process_social(self, df, path_to_result, label='', plot=False):
+        with open('{}/statistics.txt'.format(dirname), 'a') as f:
+            f.write('{}:\n'.format(label))
+            f.write('mean = {:05.1f}\n'.format(mean(df_mean)))
+            f.write('median = {:05.1f}\n'.format(median(df_mean)))
+
+        df.to_excel('{}/belief.xlsx'.format(dirname))
+        df_mean.to_excel('{}/belief_mean.xlsx'.format(dirname))
+
+        plt.figure(figsize=(10, 10))
+        df_mean.plot.hist(bins=10, color='black', legend=False)
+        plt.xlim([1, 5])
+        plt.savefig('{}/{}_mean.png'.format(dirname, label), bbox_inches='tight', dpi=200)
+        plt.close()
+
+        return df_mean, k
+
+    def __process_trust_essence(self, worksheet, df_mean, dirname, part_name, label, essence_name, k):
+        # calculate
+        n = len(df_mean)
+
+        m_0_15, m_15_25, m_25_50, m_50_75, m_75_85, m_85_100 = self.__calculate_levels(df_mean, 1, 5)
+        m_0_15_rel, m_15_25_rel, m_25_50_rel, m_50_75_rel, m_75_85_rel, m_85_100_rel \
+            = m_0_15 / n * 100, m_15_25 / n * 100, m_25_50 / n * 100, m_50_75 / n * 100, m_75_85 / n * 100, m_85_100 / n * 100
+
+        n_0_15, n_15_25, n_25_50, n_50_75, n_75_85, n_85_100 = self.__calculate_levels(df_mean, np.min(df_mean),
+                                                                                       np.max(df_mean))
+        n_0_15_rel, n_15_25_rel, n_25_50_rel, n_50_75_rel, n_75_85_rel, n_85_100_rel \
+            = n_0_15 / n * 100, n_15_25 / n * 100, n_25_50 / n * 100, n_50_75 / n * 100, n_75_85 / n * 100, n_85_100 / n * 100
+
+        # Shapiro-Wilk
+        stat, p = shapiro(df_mean)
+
+        # save to xlsx
+        worksheet.write(k, 0, '{}'.format(part_name), self.__silver_cell); k += 1
+        worksheet.write(k, 0, 'Критерий Шапиро-Уилка: stat = {:05.3f}, p = {:05.3f}'.format(stat, p)); k += 1
+        worksheet.write(k, 0, 'Уровни (по методике):'); k += 1
+        worksheet.write(k, 0, '000-015%: {:03d} ({:05.1f}%)'.format(m_0_15, m_0_15_rel)); k += 1
+        worksheet.write(k, 0, '015-025%: {:03d} ({:05.1f}%)'.format(m_15_25, m_15_25_rel)); k += 1
+        worksheet.write(k, 0, '025-050%: {:03d} ({:05.1f}%)'.format(m_25_50, m_25_50_rel)); k += 1
+        worksheet.write(k, 0, '050-075%: {:03d} ({:05.1f}%)'.format(m_50_75, m_50_75_rel)); k += 1
+        worksheet.write(k, 0, '075-085%: {:03d} ({:05.1f}%)'.format(m_75_85, m_75_85_rel)); k += 1
+        worksheet.write(k, 0, '085-100%: {:03d} ({:05.1f}%)'.format(m_85_100, m_85_100_rel)); k += 1
+        worksheet.write(k, 0, 'Уровни (по выборке):'); k += 1
+        worksheet.write(k, 0, '000-015%: {:03d} ({:05.1f}%)'.format(n_0_15, n_0_15_rel)); k += 1
+        worksheet.write(k, 0, '025-050%: {:03d} ({:05.1f}%)'.format(n_15_25, n_15_25_rel)); k += 1
+        worksheet.write(k, 0, '025-050%: {:03d} ({:05.1f}%)'.format(n_25_50, n_25_50_rel)); k += 1
+        worksheet.write(k, 0, '050-075%: {:03d} ({:05.1f}%)'.format(n_50_75, n_50_75_rel)); k += 1
+        worksheet.write(k, 0, '075-085%: {:03d} ({:05.1f}%)'.format(n_75_85, n_75_85_rel)); k += 1
+        worksheet.write(k, 0, '085-100%: {:03d} ({:05.1f}%)'.format(n_85_100, n_85_100_rel)); k += 1
+
+        with open('{}/{}_statistics.txt'.format(dirname, essence_name), 'a') as f:
+            f.write('{}:\n'.format(label))
+            f.write('mean = {:05.1f}\n'.format(mean(df_mean)))
+            f.write('median = {:05.1f}\n'.format(median(df_mean)))
+
+        # plot
+        plt.figure(figsize=(10, 10))
+        df_mean.plot.hist(bins=10, color='black', legend=False)
+        plt.xlim([1, 5])
+        plt.savefig('{}/{}_{}_mean.png'.format(dirname, essence_name, label), bbox_inches='tight', dpi=200)
+        plt.close()
+
+        return k
+
+    def __process_trust(self, worksheet, df, k, label):
         direct = [118, 121, 122, 123, 125, 127, 129, 133]
         for i in direct:
             name = '{:03d}'.format(i)
             df.loc[:][name].replace([1, 2, 4, 5], [5, 4, 2, 1], inplace=True)
 
-        # social
+        # make social dir
+        dirname = 'trust'
+        if not exists(dirname):
+            mkdir(dirname)
+
+        #
+        # social trust
+        #
 
         social = ['{:03d}'.format(i + 118) for i in range(17)]
         df_social = df[social]
         df_social_mean = df_social.mean(numeric_only=True, axis=1)
+        df_social.to_excel('{}/social.xlsx'.format(dirname))
+        df_social_mean.to_excel('{}/social_mean.xlsx'.format(dirname))
 
-        if plot:
-            fig = plt.figure(figsize=(10, 10))
-            df_social_mean.plot.hist(bins=10, color='black', legend=False)
-            plt.xlim([1, 5])
-            plt.savefig('{}_social_mean.png'.format(label), bbox_inches='tight', dpi=200)
-            plt.close()
+        k = self.__process_trust_essence(worksheet, df_social_mean, dirname, 'СОЦИАЛЬНОЕ ДОВЕРИЕ', label, 'social', k)
 
-        # inst
+        #
+        # inst trust
+        #
+
         inst = ['118', '121', '123', '125', '126', '128', '129', '131', '132']
         df_inst = df[inst]
         df_inst_mean = df_inst.mean(numeric_only=True, axis=1)
+        df_inst.to_excel('{}/inst.xlsx'.format(dirname))
+        df_inst_mean.to_excel('{}/inst_mean.xlsx'.format(dirname))
 
-        if plot:
-            fig = plt.figure(figsize=(10, 10))
-            df_inst_mean.plot.hist(bins=10, color='black', legend=False)
-            plt.xlim([1, 5])
-            plt.savefig('{}_inst_mean.png'.format(label), bbox_inches='tight', dpi=200)
-            plt.close()
+        k = self.__process_trust_essence(worksheet, df_inst_mean, dirname, 'ИНСТИТУЦИОНАЛЬНОЕ ДОВЕРИЕ', label, 'inst', k)
 
-        n1 = len(df_social_mean)
-
-        m1_0_15, m1_15_25, m1_25_50, m1_50_75, m1_75_85, m1_85_100 = self.__calculate_levels(df_social_mean, 1, 5)
-        m1_0_15_rel, m1_15_25_rel, m1_25_50_rel, m1_50_75_rel, m1_75_85_rel, m1_85_100_rel \
-            = m1_0_15 / n1 * 100, m1_15_25 / n1 * 100, m1_25_50 / n1 * 100, m1_50_75 / n1 * 100, m1_75_85 / n1 * 100, m1_85_100 / n1 * 100
-
-        n1_0_15, n1_15_25, n1_25_50, n1_50_75, n1_75_85, n1_85_100 = self.__calculate_levels(df_social_mean, np.min(df_social_mean),
-                                                                                       np.max(df_social_mean))
-        n1_0_15_rel, n1_15_25_rel, n1_25_50_rel, n1_50_75_rel, n1_75_85_rel, n1_85_100_rel \
-            = n1_0_15 / n1 * 100, n1_15_25 / n1 * 100, n1_25_50 / n1 * 100, n1_50_75 / n1 * 100, n1_75_85 / n1 * 100, n1_85_100 / n1 * 100
-
-        n2 = len(df_inst_mean)
-
-        m2_0_15, m2_15_25, m2_25_50, m2_50_75, m2_75_85, m2_85_100 = self.__calculate_levels(df_inst_mean, 1, 5)
-        m2_0_15_rel, m2_15_25_rel, m2_25_50_rel, m2_50_75_rel, m2_75_85_rel, m2_85_100_rel \
-            = m2_0_15 / n2 * 100, m2_15_25 / n2 * 100, m2_25_50 / n2 * 100, m2_50_75 / n2 * 100, m2_75_85 / n2 * 100, m2_85_100 / n2 * 100
-
-        n2_0_15, n2_15_25, n2_25_50, n2_50_75, n2_75_85, n2_85_100 = self.__calculate_levels(df_inst_mean,
-                                                                                       np.min(df_inst_mean),
-                                                                                       np.max(df_inst_mean))
-        n2_0_15_rel, n2_15_25_rel, n2_25_50_rel, n2_50_75_rel, n2_75_85_rel, n2_85_100_rel \
-            = n2_0_15 / n2 * 100, n2_15_25 / n2 * 100, n2_25_50 / n2 * 100, n2_50_75 / n2 * 100, n2_75_85 / n2 * 100, n2_85_100 / n2 * 100
-
-        stat1, p1 = shapiro(df_social_mean)
-        stat2, p2 = shapiro(df_inst_mean)
-        with open(path_to_result + '.txt', 'a') as f:
-            f.write('\n######### СОЦИАЛЬНОЕ ДОВЕРИЕ #########\n')
-            f.write('Критерий Шапиро-Уилка: {:04.3f}, p={:04.3f}\n'.format(stat1, p1))
-            f.write('Уровни (по методике)\n')
-            f.write('000-015%: {:03d} ({:05.1f}%)\n'.format(m1_0_15, m1_0_15_rel))
-            f.write('015-025%: {:03d} ({:05.1f}%)\n'.format(m1_15_25, m1_15_25_rel))
-            f.write('025-050%: {:03d} ({:05.1f}%)\n'.format(m1_25_50, m1_25_50_rel))
-            f.write('050-075%: {:03d} ({:05.1f}%)\n'.format(m1_50_75, m1_50_75_rel))
-            f.write('075-085%: {:03d} ({:05.1f}%)\n'.format(m1_75_85, m1_75_85_rel))
-            f.write('085-100%: {:03d} ({:05.1f}%)\n'.format(m1_85_100, m1_85_100_rel))
-            f.write('Уровни (по выборке)\n')
-            f.write('000-015%: {:03d} ({:05.1f}%)\n'.format(n1_0_15, n1_0_15_rel))
-            f.write('015-025%: {:03d} ({:05.1f}%)\n'.format(n1_15_25, n1_15_25_rel))
-            f.write('025-050%: {:03d} ({:05.1f}%)\n'.format(n1_25_50, n1_25_50_rel))
-            f.write('050-075%: {:03d} ({:05.1f}%)\n'.format(n1_50_75, n1_50_75_rel))
-            f.write('075-085%: {:03d} ({:05.1f}%)\n'.format(n1_75_85, n1_75_85_rel))
-            f.write('085-100%: {:03d} ({:05.1f}%)\n'.format(n1_85_100, n1_85_100_rel))
-            f.write('\n##### ИНСТИТУЦИОНАЛЬНОЕ ДОВЕРИЕ #####\n')
-            f.write('Критерий Шапиро-Уилка: {:04.3f}, p={:04.3f}\n'.format(stat2, p2))
-            f.write('Уровни (по методике)\n')
-            f.write('000-015%: {:03d} ({:05.1f}%)\n'.format(m2_0_15, m2_0_15_rel))
-            f.write('015-025%: {:03d} ({:05.1f}%)\n'.format(m2_15_25, m2_15_25_rel))
-            f.write('025-050%: {:03d} ({:05.1f}%)\n'.format(m2_25_50, m2_25_50_rel))
-            f.write('050-075%: {:03d} ({:05.1f}%)\n'.format(m2_50_75, m2_50_75_rel))
-            f.write('075-085%: {:03d} ({:05.1f}%)\n'.format(m2_75_85, m2_75_85_rel))
-            f.write('085-100%: {:03d} ({:05.1f}%)\n'.format(m2_85_100, m2_85_100_rel))
-            f.write('Уровни (по выборке)\n')
-            f.write('000-015%: {:03d} ({:05.1f}%)\n'.format(n2_0_15, n2_0_15_rel))
-            f.write('015-025%: {:03d} ({:05.1f}%)\n'.format(n2_15_25, n2_15_25_rel))
-            f.write('025-050%: {:03d} ({:05.1f}%)\n'.format(n2_25_50, n2_25_50_rel))
-            f.write('050-075%: {:03d} ({:05.1f}%)\n'.format(n2_50_75, n2_50_75_rel))
-            f.write('075-085%: {:03d} ({:05.1f}%)\n'.format(n2_75_85, n2_75_85_rel))
-            f.write('085-100%: {:03d} ({:05.1f}%)\n'.format(n2_85_100, n2_85_100_rel))
-
-        return df_social_mean, df_inst_mean
+        return df_social_mean, df_inst_mean, k
 
     @staticmethod
     def __normalize_scale_1_to_5(col):
@@ -787,4 +917,4 @@ class Processor:
 
 
 if __name__ == '__main__':
-    processor = Processor(path_to_xlsx='data.xlsx')
+    processor = Processor(path_to_xlsx='data_input.xlsx')

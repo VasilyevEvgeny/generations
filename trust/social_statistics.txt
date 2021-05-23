@@ -1,12 +1,12 @@
 all:
-mean = 003.3
-median = 003.4
+mean = 002.7
+median = 002.6
 z:
-mean = 003.4
-median = 003.4
+mean = 002.6
+median = 002.6
 y:
-mean = 003.4
-median = 003.4
+mean = 002.6
+median = 002.6
 x:
-mean = 003.2
-median = 003.2
+mean = 002.8
+median = 002.8

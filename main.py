@@ -10,6 +10,7 @@ from os import remove, mkdir
 from shutil import rmtree
 import numpy as np
 from numpy import mean, std, sqrt, nan, median
+from operator import itemgetter
 from scipy.stats import shapiro
 import xlsxwriter
 import hdbscan
@@ -135,7 +136,10 @@ class Processor:
         df['inst_mean'] = df_inst_mean
         df.to_excel('data_output.xlsx')
 
-        self.__clusterize(df)
+        self.__clusterize(self.__worksheet_all, df, self.__k_all, 'all')
+        self.__clusterize(self.__worksheet_z, df_z, self.__k_z, 'z')
+        self.__clusterize(self.__worksheet_y, df_y, self.__k_y, 'y')
+        self.__clusterize(self.__worksheet_x, df_x, self.__k_x, 'x')
 
         self.__workbook.close()
 
@@ -615,9 +619,9 @@ class Processor:
 
     def __calculate_core(self, df, label, worksheet, k, positive_coeff=True):
         if positive_coeff:
-            target_answers = (1, 2)
-        else:
             target_answers = (4, 5)
+        else:
+            target_answers = (1, 2)
 
         features = list(df.columns)
         n_features = len(features)
@@ -690,17 +694,17 @@ class Processor:
 
     @staticmethod
     def __preprocess_answers(df):
-        df = df.replace('Абсолютно согласен', 1)
-        df = df.replace('Согласен', 2)
+        df = df.replace('Абсолютно согласен', 5)
+        df = df.replace('Согласен', 4)
         df = df.replace('Затрудняюсь ответить', 3)
-        df = df.replace('Не согласен', 4)
-        df = df.replace('Абсолютно не согласен', 5)
+        df = df.replace('Не согласен', 2)
+        df = df.replace('Абсолютно не согласен', 1)
 
-        df = df.replace('Полностью согласен', 1)
-        df = df.replace('Скорее согласен', 2)
+        df = df.replace('Полностью согласен', 5)
+        df = df.replace('Скорее согласен', 4)
         df = df.replace('Затрудняюсь ответить', 3)
-        df = df.replace('Скорее не согласен', 4)
-        df = df.replace('Полностью не согласен', 5)
+        df = df.replace('Скорее не согласен', 2)
+        df = df.replace('Полностью не согласен', 1)
 
         return df
 
@@ -853,7 +857,7 @@ class Processor:
 
         return col
 
-    def __clusterize(self, df):
+    def __clusterize(self, worksheet, df, k, label):
         #
         # preprocessing and normalization
         #
@@ -889,30 +893,67 @@ class Processor:
             col_name = '{:03d}'.format(i)
             df[col_name] = self.__normalize_scale_1_to_5(df[col_name])
 
+        cols_short_names = list(df.columns)
+        cols_full_names = []
+        for i in range(len(cols_short_names)):
+            short_name = cols_short_names[i]
+            name = self.__features_words[short_name] if short_name.isnumeric() else short_name
+            cols_full_names.append(name)
+
+        #
+        # df preparation
+        #
+
+        # cols_criterion = ['{:03d}'.format(i) for i in range(93, 118, 1)]
+        # cols_opinion = ['{:03d}'.format(i) for i in range(36, 46, 1)] + ['047', '048', '091', '092']
+        # df = df[cols_opinion]
+
+        data = df.to_numpy().transpose()
+
         #
         # clusterization
         #
 
-        X = TSNE(n_components=2).fit_transform(df)
+        X = TSNE(n_components=2).fit_transform(data)
 
         clusterer = hdbscan.HDBSCAN(min_cluster_size=10)
         clusterer.fit(X)
 
-        labels = clusterer.labels_
+        labels = list(clusterer.labels_).copy()
         min_label = np.min(labels)
-        for i in range(len(df)):
-            labels[i] -= min_label
+        for i in range(len(labels)):
+            labels[i] = labels[i] - min_label + 1
 
-        n_colors = len(np.unique(clusterer.labels_))
+        clusters = {}
+        for i in range(len(labels)):
+            key = labels[i]
+            if key not in clusters.keys():
+                clusters.update({key: [cols_full_names[i]]})
+            else:
+                clusters[key].append(cols_full_names[i])
+        clusters = sorted(list(clusters.items()), key=lambda x: x[0])
+
+        worksheet.write(k, 0, 'ФАКТОРНЫЙ АНАЛИЗ', self.__silver_cell); k += 1
+        for i in range(len(clusters)):
+            worksheet.write(k, 0, 'Фактор #{}'.format(clusters[i][0]), self.__bold_cell); k += 1
+            for j in range(len(clusters[i][1])):
+                worksheet.write(k, 0, '{}'.format(clusters[i][1][j])); k += 1
+
+        n_colors = len(np.unique(labels))
         cmap = cm.get_cmap('jet')
         colors = []
         for i in range(n_colors):
             colors.append(cmap((i + 0.5) / n_colors))
 
+        dir_name = 'clusterization'
+        if not exists(dir_name):
+            mkdir(dir_name)
+
+        # plot picture
         plt.figure(figsize=(10, 10))
         for i in range(X.shape[0]):
-            plt.scatter(X[i, 0], X[i, 1], s=100, color=colors[labels[i]])
-        plt.savefig('clusterization.png', bbox_inches='tight', dpi=200)
+            plt.scatter(X[i, 0], X[i, 1], s=100, color=colors[labels[i] - 1])
+        plt.savefig('{}/clusterization_{}.png'.format(dir_name, label), bbox_inches='tight', dpi=200)
         plt.close()
 
 

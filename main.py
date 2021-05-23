@@ -136,10 +136,10 @@ class Processor:
         df['inst_mean'] = df_inst_mean
         df.to_excel('data_output.xlsx')
 
-        self.__clusterize(self.__worksheet_all, df, self.__k_all, 'all')
-        self.__clusterize(self.__worksheet_z, df_z, self.__k_z, 'z')
-        self.__clusterize(self.__worksheet_y, df_y, self.__k_y, 'y')
-        self.__clusterize(self.__worksheet_x, df_x, self.__k_x, 'x')
+        # self.__k_all = self.__clusterize(self.__worksheet_all, df, self.__k_all, 'all')
+        # self.__k_z = self.__clusterize(self.__worksheet_z, df_z, self.__k_z, 'z')
+        # self.__k_y = self.__clusterize(self.__worksheet_y, df_y, self.__k_y, 'y')
+        # self.__k_x = self.__clusterize(self.__worksheet_x, df_x, self.__k_x, 'x')
 
         self.__workbook.close()
 
@@ -599,7 +599,7 @@ class Processor:
         st5 = ['Про другие поколения', ['{:03d}'.format(i) for i in range(15, 22, 1)]]
         st6 = ['Прогноз', ['{:03d}'.format(i) for i in range(24, 36, 1)]]
         st7 = ['Действие', ['046'] + ['049'] + ['{:03d}'.format(i) for i in range(75, 83, 1)]]
-        st_all = ['Утверждения', st1[1] + st2[1] + st3[1] + st4[1] + st5[1], st6[1], st7[1]]
+        st_all = ['Утверждения', sorted(st1[1] + st2[1] + st3[1] + st4[1] + st5[1] + st6[1] + st7[1])]
         sts = [st_all, st1, st2, st3, st4, st5, st6, st7]
 
         belief = ['{:03d}'.format(i) for i in range(self.__n_belief_min, self.__n_belief_max + 1, 1)]
@@ -955,6 +955,9 @@ class Processor:
             plt.scatter(X[i, 0], X[i, 1], s=100, color=colors[labels[i] - 1])
         plt.savefig('{}/clusterization_{}.png'.format(dir_name, label), bbox_inches='tight', dpi=200)
         plt.close()
+
+
+        return k
 
 
 if __name__ == '__main__':

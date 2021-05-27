@@ -134,12 +134,13 @@ class Processor:
         df['belief_mean'] = df_belief_mean
         df['social_mean'] = df_social_mean
         df['inst_mean'] = df_inst_mean
-        df.to_excel('data_output.xlsx')
 
-        # self.__k_all = self.__clusterize(self.__worksheet_all, df, self.__k_all, 'all')
+        df, self.__k_all = self.__clusterize(self.__worksheet_all, df, self.__k_all, 'all')
         # self.__k_z = self.__clusterize(self.__worksheet_z, df_z, self.__k_z, 'z')
         # self.__k_y = self.__clusterize(self.__worksheet_y, df_y, self.__k_y, 'y')
         # self.__k_x = self.__clusterize(self.__worksheet_x, df_x, self.__k_x, 'x')
+
+        df.to_excel('data_output.xlsx')
 
         self.__workbook.close()
 
@@ -879,7 +880,7 @@ class Processor:
         df['education_level'] = df['education_level'].replace('Среднее специальное образование', 3)
         df['education_level'] = df['education_level'].replace('Неполное высшее образование', 4)
         df['education_level'] = df['education_level'].replace('Высшее образование', 5)
-        df['education_level'] = self.__normalize_scale_1_to_5(df['education_level'])
+        # df['education_level'] = self.__normalize_scale_1_to_5(df['education_level'])
 
         # 002
         df['002'] = df['002'].replace('Много раз в день', 1)
@@ -957,7 +958,7 @@ class Processor:
         plt.close()
 
 
-        return k
+        return df, k
 
 
 if __name__ == '__main__':

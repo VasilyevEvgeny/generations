@@ -6,3 +6,5 @@ shapely
 xlsxwriter
 hdbscan
 scikit-learn
+xlrd
+openpyxl

@@ -1,6 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-import geopandas as gpd
+# import geopandas as gpd
 from shapely.geometry import LineString
 from shapely.ops import split
 from shapely.affinity import translate
@@ -72,7 +72,7 @@ class Processor:
 
         # cities
         df_cities, n_top = self.__process_cities(df)
-        self.__plot_cities_on_map(df_cities, n_top)
+        # self.__plot_cities_on_map(df_cities, n_top)
 
         # age
         self.__z_min, self.__z_max = 16, 21
@@ -171,7 +171,7 @@ class Processor:
         df = pd.read_excel(self.__path_to_xlsx)
 
         len_base = len(self.__base_columns)
-        with open('features.txt', 'w') as f:
+        with open('features.txt', 'w', encoding='utf-8') as f:
             for i in range(len_base, len(columns), 1):
                 f.write('{}\n{}\n\n'.format(columns[i], df.columns[i]))
                 self.__features_words.update({columns[i]: df.columns[i]})

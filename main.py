@@ -695,11 +695,11 @@ class Processor:
 
     @staticmethod
     def __preprocess_answers(df):
-        df = df.replace('Абсолютно согласен', 5)
-        df = df.replace('Согласен', 4)
+        df = df.replace('Абсолютно согласен', 1)
+        df = df.replace('Согласен', 2)
         df = df.replace('Затрудняюсь ответить', 3)
-        df = df.replace('Не согласен', 2)
-        df = df.replace('Абсолютно не согласен', 1)
+        df = df.replace('Не согласен', 4)
+        df = df.replace('Абсолютно не согласен', 5)
 
         df = df.replace('Полностью согласен', 5)
         df = df.replace('Скорее согласен', 4)
@@ -816,8 +816,9 @@ class Processor:
         return k
 
     def __process_trust(self, worksheet, df, k, label):
-        direct = [118, 121, 122, 123, 125, 127, 129, 133]
-        for i in direct:
+        # direct = [118, 121, 122, 123, 125, 127, 129, 133]
+        inversed = [119, 120, 124, 126, 128, 130, 131, 132, 134]
+        for i in inversed:
             name = '{:03d}'.format(i)
             df.loc[:][name].replace([1, 2, 4, 5], [5, 4, 2, 1], inplace=True)
 
@@ -833,8 +834,8 @@ class Processor:
         social = ['{:03d}'.format(i + 118) for i in range(17)]
         df_social = df[social]
         df_social_mean = df_social.mean(numeric_only=True, axis=1)
-        df_social.to_excel('{}/social.xlsx'.format(dirname))
-        df_social_mean.to_excel('{}/social_mean.xlsx'.format(dirname))
+        df_social.to_excel('{}/social_{}.xlsx'.format(dirname, label))
+        df_social_mean.to_excel('{}/social_mean_{}.xlsx'.format(dirname, label))
 
         k = self.__process_trust_essence(worksheet, df_social_mean, dirname, 'СОЦИАЛЬНОЕ ДОВЕРИЕ', label, 'social', k)
 
@@ -845,8 +846,8 @@ class Processor:
         inst = ['118', '121', '123', '125', '126', '128', '129', '131', '132']
         df_inst = df[inst]
         df_inst_mean = df_inst.mean(numeric_only=True, axis=1)
-        df_inst.to_excel('{}/inst.xlsx'.format(dirname))
-        df_inst_mean.to_excel('{}/inst_mean.xlsx'.format(dirname))
+        df_inst.to_excel('{}/inst_{}.xlsx'.format(dirname, label))
+        df_inst_mean.to_excel('{}/inst_mean_{}.xlsx'.format(dirname, label))
 
         k = self.__process_trust_essence(worksheet, df_inst_mean, dirname, 'ИНСТИТУЦИОНАЛЬНОЕ ДОВЕРИЕ', label, 'inst', k)
 
